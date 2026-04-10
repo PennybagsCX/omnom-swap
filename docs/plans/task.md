@@ -1,8 +1,6 @@
 | Status | Task |
 |--------|------|
-| [x] | Explore project context |
-| [x] | Ask clarifying questions |
-| [x] | Propose 2-3 approaches |
-| [x] | Present design sections |
-| [x] | Write design doc |
-| [/] | Invoke writing-plans skill |
+| [x] | Task 1: Scaffold Vite Architecture & Configuration |
+| [x] | Task 2: Build the Core UI & Layout Components |
+| [x] | Task 3: Implement the Swap Screen Application Logic |
+| [x] | Task 4: Implement Pools and Stats Screens |

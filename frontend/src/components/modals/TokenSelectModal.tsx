@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TOKENS } from '../../constants/tokens';
 import GlassPanel from '../ui/GlassPanel';
-import { Token } from '../../types';
+import type { Token } from '../../types';
 
 interface TokenSelectModalProps {
   onClose: () => void;

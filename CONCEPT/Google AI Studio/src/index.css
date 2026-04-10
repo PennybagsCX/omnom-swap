@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&family=Inter:wght@100;300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #FFD700;
+  --color-primary-dim: #e6c200;
+  --color-secondary: #9D00FF;
+  --color-tertiary: #8eff71;
+  --color-background: #0e0e0e;
+  --color-surface: #0e0e0e;
+  --color-surface-container-lowest: #000000;
+  --color-surface-container-low: #131313;
+  --color-surface-container: #1a1a1a;
+  --color-surface-container-high: #20201f;
+  --color-surface-container-highest: #262626;
+  --color-surface-bright: #2c2c2c;
+  --color-outline-variant: #484847;
+  --color-on-surface: #ffffff;
+  --color-on-surface-variant: #adaaaa;
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+}
+
+body {
+    background-color: var(--color-background);
+    background-image: radial-gradient(circle at 2px 2px, rgba(255, 215, 0, 0.02) 1px, transparent 0);
+    background-size: 40px 40px;
+    color: var(--color-on-surface);
+}
+
+.grain-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+.beast-mode-glow {
+    text-shadow: 0 0 20px rgba(157, 0, 255, 0.6);
+}
+.neon-glow {
+    filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.3));
+}
+.neon-border {
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.15);
+}
+.neon-text-glow {
+    text-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+}
+.glass-panel {
+    background: rgba(26, 26, 26, 0.6);
+    backdrop-filter: blur(12px);
+}
+.industrial-bg {
+    background-image: 
+        linear-gradient(rgba(255, 215, 0, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 215, 0, 0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+}

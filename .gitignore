@@ -20,3 +20,4 @@ coverage/
 
 # Pack artifacts
 *.tgz
+.worktrees/

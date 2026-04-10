@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import GlassPanel from '../ui/GlassPanel';
 import Button from '../ui/Button';
 import TokenSelectModal from '../modals/TokenSelectModal';
 import { TOKENS } from '../../constants/tokens';
-import { Token } from '../../types';
+import type { Token } from '../../types';
+import { useGetAmountsOut, useDogeSwap, useTokenBalance } from '../../hooks/useDogeSwap';
+import { formatUnits } from 'viem';
+import { useAccount, useConnect } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 
 export default function SwapCard() {
   const [sellToken, setSellToken] = useState<Token>(TOKENS[1]); // DOGE
@@ -11,6 +15,18 @@ export default function SwapCard() {
   const [sellAmount, setSellAmount] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTarget, setModalTarget] = useState<'sell' | 'buy' | null>(null);
+
+  const { isConnected } = useAccount();
+  const { connect } = useConnect();
+
+  const { balance: sellBalanceData } = useTokenBalance(sellToken.address);
+  const { balance: buyBalanceData } = useTokenBalance(buyToken.address);
+
+  const displaySellBalance = sellBalanceData !== undefined ? formatUnits(sellBalanceData as bigint, 18).substring(0,6) : sellToken.balance;
+  const displayBuyBalance = buyBalanceData !== undefined ? formatUnits(buyBalanceData as bigint, 18).substring(0,6) : buyToken.balance;
+
+  const { data: amountsOut } = useGetAmountsOut(sellAmount, sellToken.address, buyToken.address, 18);
+  const { approve, swap } = useDogeSwap();
 
   const handleOpenModal = (target: 'sell' | 'buy') => {
     setModalTarget(target);
@@ -22,6 +38,25 @@ export default function SwapCard() {
     if (modalTarget === 'buy') setBuyToken(token);
     setIsModalOpen(false);
   };
+
+  const executeSwap = async () => {
+    if (!isConnected) {
+      connect({ connector: injected() });
+      return;
+    }
+    try {
+      if (!amountsOut) return;
+      const expectedOut = formatUnits((amountsOut as readonly bigint[])[1], 18);
+      const minOut = (Number(expectedOut) * 0.95).toFixed(18); // 5% slippage
+      
+      await approve(sellToken.address, sellAmount, 18);
+      await swap(sellToken.address, buyToken.address, sellAmount, minOut, 18, 18);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  const buyOutputParsed = amountsOut ? formatUnits((amountsOut as readonly bigint[])[1], 18).substring(0,8) : '';
 
   return (
     <div className="max-w-lg mx-auto w-full">
@@ -35,7 +70,7 @@ export default function SwapCard() {
           <div className="bg-surface-container p-4 rounded-xl border border-outline-variant/10 group focus-within:border-primary/30 transition-colors">
             <div className="flex justify-between mb-2">
               <span className="text-sm font-medium text-on-surface-variant uppercase tracking-wider">You Bleed</span>
-              <span className="text-sm font-medium text-on-surface-variant">Balance: {sellToken.balance}</span>
+              <span className="text-sm font-medium text-on-surface-variant">Balance: {displaySellBalance}</span>
             </div>
             <div className="flex justify-between items-center">
               <input type="text" placeholder="0.0" value={sellAmount} onChange={e => setSellAmount(e.target.value)} className="bg-transparent text-4xl border-none outline-none font-mono text-white placeholder-on-surface-variant/30 flex-1 w-full" />
@@ -59,10 +94,10 @@ export default function SwapCard() {
           <div className="bg-surface-container p-4 rounded-xl border border-outline-variant/10 group focus-within:border-tertiary/30 transition-colors">
             <div className="flex justify-between mb-2">
               <span className="text-sm font-medium text-on-surface-variant uppercase tracking-wider">You Devour</span>
-              <span className="text-sm font-medium text-on-surface-variant">Balance: {buyToken.balance}</span>
+              <span className="text-sm font-medium text-on-surface-variant">Balance: {displayBuyBalance}</span>
             </div>
             <div className="flex justify-between items-center">
-              <input type="text" placeholder="0.0" value={sellAmount ? (parseFloat(sellAmount)*1.5).toString() : ''} readOnly className="bg-transparent text-4xl border-none outline-none font-mono text-white placeholder-on-surface-variant/30 flex-1 w-full text-tertiary" />
+              <input type="text" placeholder="0.0" value={sellAmount ? buyOutputParsed : ''} readOnly className="bg-transparent text-4xl border-none outline-none font-mono text-white placeholder-on-surface-variant/30 flex-1 w-full text-tertiary" />
               <button 
                 onClick={() => handleOpenModal('buy')}
                 className="flex items-center gap-2 bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/20 rounded-full py-1 px-3 transition-colors shrink-0 font-headline font-bold text-white uppercase"
@@ -74,8 +109,8 @@ export default function SwapCard() {
             </div>
           </div>
           
-          <Button isFullWidth className="mt-6 text-xl h-16 bg-primary text-black">
-            Execute Swap
+          <Button isFullWidth onClick={executeSwap} className="mt-6 text-xl h-16 bg-primary text-black">
+            {isConnected ? 'Execute Swap' : 'Connect Wallet'}
           </Button>
         </div>
       </GlassPanel>

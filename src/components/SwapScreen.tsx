@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, ChevronDown, ArrowDownUp, Info, Zap, Search, Ghost } from 'lucide-react';
-import { useAccount, useBalance } from 'wagmi';
+import { Settings, ChevronDown, ArrowDownUp, Info, Zap, Search, Ghost, X } from 'lucide-react';
+import { useAccount, useBalance, useReadContract, useWriteContract } from 'wagmi';
+import { erc20Abi, parseAbi, parseUnits, formatUnits } from 'viem';
 import { TOKENS, CONTRACTS } from '../lib/constants';
 
 const INITIAL_SWAP_HISTORY = [
@@ -24,23 +25,35 @@ export function SwapScreen() {
   const [swapHistory, setSwapHistory] = useState(INITIAL_SWAP_HISTORY);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
 
   const { address, isConnected } = useAccount();
+
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: sellToken.address as `0x${string}`,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: address ? [address, CONTRACTS.ALGEBRA_V3_ROUTER as `0x${string}`] : undefined,
+    query: { enabled: isConnected && sellToken.symbol !== 'DOGE' && sellToken.address !== CONTRACTS.WWDOGE }
+  });
+
+  const { writeContractAsync: writeContract } = useWriteContract();
+
 
   const sellBalanceQuery = useBalance({
     address: address,
     token: sellToken.address === CONTRACTS.WWDOGE || sellToken.symbol === 'DOGE' ? undefined : sellToken.address as `0x${string}`,
     query: { enabled: isConnected }
-  });
+  } as any);
 
   const buyBalanceQuery = useBalance({
     address: address,
     token: buyToken.address === CONTRACTS.WWDOGE || buyToken.symbol === 'DOGE' ? undefined : buyToken.address as `0x${string}`,
     query: { enabled: isConnected }
-  });
+  } as any);
 
-  const displaySellBalance = isConnected ? (sellBalanceQuery.data ? Number(sellBalanceQuery.data.formatted) : 0) : sellToken.balance;
-  const displayBuyBalance = isConnected ? (buyBalanceQuery.data ? Number(buyBalanceQuery.data.formatted) : 0) : buyToken.balance;
+  const displaySellBalance = isConnected ? (sellBalanceQuery.data ? Number(formatUnits(sellBalanceQuery.data.value as bigint, sellBalanceQuery.data.decimals as number)) : 0) : sellToken.balance;
+  const displayBuyBalance = isConnected ? (buyBalanceQuery.data ? Number(formatUnits(buyBalanceQuery.data.value as bigint, buyBalanceQuery.data.decimals as number)) : 0) : buyToken.balance;
 
   const filteredTokens = TOKENS.filter(t => 
     t.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -65,6 +78,9 @@ export function SwapScreen() {
 
   let buttonText = "CHOMP THE SWAP";
   let isDisabled = false;
+  let needsApproval = false;
+  
+  const parsedSellWei = parsedSell > 0 ? parseUnits(parsedSell.toString(), 18) : 0n;
 
   if (!isConnected) {
     buttonText = "CONNECT WALLET";
@@ -75,7 +91,32 @@ export function SwapScreen() {
   } else if (parsedSell > displaySellBalance) {
     buttonText = "INSUFFICIENT BALANCE";
     isDisabled = true;
+  } else if (sellToken.symbol !== 'DOGE' && sellToken.address !== CONTRACTS.WWDOGE && allowance !== undefined && allowance < parsedSellWei) {
+    needsApproval = true;
+    buttonText = isApproving ? "APPROVING..." : "APPROVE ROUTER";
+    isDisabled = isApproving;
   }
+
+  const handleExecuteAction = async () => {
+    if (needsApproval) {
+      setIsApproving(true);
+      try {
+        await writeContract({
+          address: sellToken.address as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'approve',
+          args: [CONTRACTS.ALGEBRA_V3_ROUTER as `0x${string}`, parsedSellWei],
+        } as any);
+        setTimeout(() => refetchAllowance(), 2000);
+      } catch (error) {
+        console.error("Approval failed", error);
+      } finally {
+        setIsApproving(false);
+      }
+    } else {
+      setShowConfirmModal(true);
+    }
+  };
 
   const handleSwapTokens = () => {
     const temp = sellToken;
@@ -279,7 +320,7 @@ export function SwapScreen() {
             >
               <button 
                 disabled={isDisabled}
-                onClick={() => setShowConfirmModal(true)}
+                onClick={handleExecuteAction}
                 className={`w-full font-headline font-black text-xl py-5 uppercase tracking-tighter transition-all relative overflow-hidden cursor-pointer ${
                   isDisabled 
                     ? 'bg-surface-container-highest text-on-surface-variant cursor-not-allowed border border-outline-variant/30' 
@@ -500,10 +541,30 @@ export function SwapScreen() {
                     Cancel
                   </button>
                   <button 
-                    onClick={() => {
+                    onClick={async () => {
                       setIsSwapping(true);
-                      setTimeout(() => {
-                        setIsSwapping(false);
+                      try {
+                        const routerAbi = parseAbi(['function exactInputSingle((address tokenIn, address tokenOut, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 limitSqrtPrice) params) external payable returns (uint256 amountOut)']);
+                        
+                        const isSellingNative = sellToken.symbol === 'DOGE' || sellToken.address === CONTRACTS.WWDOGE;
+                        const wDoge = CONTRACTS.WWDOGE as `0x${string}`;
+                        
+                        await writeContract({
+                          address: CONTRACTS.ALGEBRA_V3_ROUTER as `0x${string}`,
+                          abi: routerAbi,
+                          functionName: 'exactInputSingle',
+                          args: [{
+                            tokenIn: isSellingNative ? wDoge : sellToken.address as `0x${string}`,
+                            tokenOut: buyToken.symbol === 'DOGE' ? wDoge : buyToken.address as `0x${string}`,
+                            recipient: address!,
+                            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
+                            amountIn: parsedSellWei,
+                            amountOutMinimum: parseUnits(minReceived.toString(), 18),
+                            limitSqrtPrice: 0n,
+                          }],
+                          value: isSellingNative ? parsedSellWei : 0n,
+                        } as any);
+                        
                         setShowConfirmModal(false);
                         setSwapHistory([{
                           id: Date.now(),
@@ -514,7 +575,11 @@ export function SwapScreen() {
                           time: 'Just now'
                         }, ...swapHistory]);
                         setSellAmount('');
-                      }, 2000);
+                      } catch (error) {
+                        console.error('Swap failed:', error);
+                      } finally {
+                        setIsSwapping(false);
+                      }
                     }}
                     className="flex-1 py-3 font-headline font-black uppercase tracking-widest bg-primary text-on-primary hover:bg-white hover:text-black transition-colors shadow-[0_0_20px_rgba(255,215,0,0.2)] cursor-pointer"
                   >

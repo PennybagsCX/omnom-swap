@@ -1,6 +1,6 @@
-| Status | Task |
-|--------|------|
-| [x] | Task 1: Scaffold Vite Architecture & Configuration |
-| [x] | Task 2: Build the Core UI & Layout Components |
-| [x] | Task 3: Implement the Swap Screen Application Logic |
-| [x] | Task 4: Implement Pools and Stats Screens |
+- `[x]` Explore project context — check files, docs, recent commits
+- `[x]` Ask clarifying questions — one at a time, understand purpose/constraints/success criteria
+- `[x]` Propose 2-3 approaches — with trade-offs and your recommendation
+- `[x]` Present design — in sections scaled to their complexity, get user approval after each section
+- `[x]` Write design doc — save to `docs/plans/YYYY-MM-DD-<topic>-design.md` and commit
+- `[/]` Transition to implementation — invoke writing-plans skill to create implementation plan

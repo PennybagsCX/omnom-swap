@@ -3,4 +3,4 @@
 - `[x]` Propose 2-3 approaches — with trade-offs and your recommendation
 - `[x]` Present design — in sections scaled to their complexity, get user approval after each section
 - `[x]` Write design doc — save to `docs/plans/YYYY-MM-DD-<topic>-design.md` and commit
-- `[/]` Transition to implementation — invoke writing-plans skill to create implementation plan
+- `[x]` Transition to implementation — invoke writing-plans skill to create implementation plan

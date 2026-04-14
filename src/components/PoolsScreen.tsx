@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ExternalLink, Droplets, PawPrint, AlertTriangle, Plus, Minus } from 'lucide-react';
-import { CONTRACTS, NETWORK_INFO } from '../lib/constants';
+import { CONTRACTS, NETWORK_INFO, calcPriceImpact, impactColor } from '../lib/constants';
 import { useOmnomData } from '../hooks/useOmnomData';
 import { LiquidityModal } from './LiquidityModal';
 
@@ -22,7 +22,8 @@ interface PoolData {
   };
 }
 
-function fmtUsd(n: number): string {
+function fmtUsd(n: number | null): string {
+  if (n === null) return '\u2014';
   if (n === 0) return '$0';
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
@@ -30,6 +31,8 @@ function fmtUsd(n: number): string {
   if (n >= 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(8)}`;
 }
+
+const LOW_TVL_THRESHOLD = 500; // Pools below $500 TVL flagged as low-liquidity
 
 function pctChange(val: string | undefined): { text: string; color: string } {
   if (!val) return { text: '\u2014', color: 'text-on-surface-variant' };
@@ -52,10 +55,11 @@ export function PoolsScreen() {
     pairAddress: string;
     poolName: string;
     dexId: string;
-  }>({ open: false, mode: 'add', pairAddress: '', poolName: '', dexId: '' });
+    tvl: number;
+  }>({ open: false, mode: 'add', pairAddress: '', poolName: '', dexId: '', tvl: 0 });
 
-  const openLpModal = (mode: 'add' | 'remove', pairAddress: string, poolName: string, dexId: string) => {
-    setLpModal({ open: true, mode, pairAddress, poolName, dexId });
+  const openLpModal = (mode: 'add' | 'remove', pairAddress: string, poolName: string, dexId: string, tvl: number) => {
+    setLpModal({ open: true, mode, pairAddress, poolName, dexId, tvl });
   };
 
   const closeLpModal = () => {
@@ -64,7 +68,7 @@ export function PoolsScreen() {
 
   const pools = allPools as unknown as PoolData[];
   const isRateLimited = poolsListError?.message?.includes('429');
-  const txns24Total = totalTxns24.buys + totalTxns24.sells;
+  const txns24Total = totalTxns24 ? totalTxns24.buys + totalTxns24.sells : null;
   const hasError = !!poolsListError;
 
   return (
@@ -76,26 +80,26 @@ export function PoolsScreen() {
 
       {/* Summary cards — aggregated across ALL pools */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-surface-container-low p-4 border-l-2 border-primary text-center">
+        <div className="bg-surface-container-low p-4 border-l-2 border-primary text-center flex flex-col items-center justify-center">
           <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">Pool TVL</p>
           <p className="font-headline font-bold text-white text-xl">{fmtUsd(totalTvl)}</p>
         </div>
-        <div className="bg-surface-container-low p-4 border-l-2 border-secondary text-center">
+        <div className="bg-surface-container-low p-4 border-l-2 border-secondary text-center flex flex-col items-center justify-center">
           <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">24H Volume</p>
           <p className="font-headline font-bold text-white text-xl">{fmtUsd(totalVol24)}</p>
         </div>
-        <div className="bg-surface-container-low p-4 border-l-2 border-green-400 text-center">
+        <div className="bg-surface-container-low p-4 border-l-2 border-green-400 text-center flex flex-col items-center justify-center">
           <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">24H Txns</p>
-          <p className="font-headline font-bold text-white text-xl">{txns24Total.toLocaleString()}</p>
+          <p className="font-headline font-bold text-white text-xl">{txns24Total !== null ? txns24Total.toLocaleString() : '\u2014'}</p>
           <div className="flex gap-2 mt-1 justify-center">
-            <span className="text-[10px] text-green-400">{totalTxns24.buys} buys</span>
+            <span className="text-[10px] text-green-400">{totalTxns24 ? totalTxns24.buys : '\u2014'} buys</span>
             <span className="text-[10px] text-on-surface-variant">/</span>
-            <span className="text-[10px] text-red-400">{totalTxns24.sells} sells</span>
+            <span className="text-[10px] text-red-400">{totalTxns24 ? totalTxns24.sells : '\u2014'} sells</span>
           </div>
         </div>
-        <div className="bg-surface-container-low p-4 border-l-2 border-outline-variant text-center">
+        <div className="bg-surface-container-low p-4 border-l-2 border-outline-variant text-center flex flex-col items-center justify-center">
           <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">On-Chain Pools</p>
-          <p className="font-headline font-bold text-white text-xl">{poolCount > 0 ? poolCount : '\u2014'}</p>
+          <p className="font-headline font-bold text-white text-xl">{poolCount ? poolCount : '\u2014'}</p>
         </div>
       </div>
 
@@ -143,6 +147,8 @@ export function PoolsScreen() {
               const change = pctChange(attr.price_change_percentage?.h24);
               const pTxns = (attr.transactions?.h24?.buys || 0) + (attr.transactions?.h24?.sells || 0);
               const price = parseFloat(attr.base_token_price_usd || '0');
+              // $100 reference trade impact estimate (half TVL = sell-side reserve approximation)
+              const refImpact = tvl > 0 ? calcPriceImpact(100, tvl / 2) : 0;
 
               return (
                 <div key={pool.id} className={`bg-surface-container-low border border-outline-variant/15 p-4 ${i === 0 ? 'border-l-4 border-l-primary bg-primary/5' : ''}`}>
@@ -150,13 +156,24 @@ export function PoolsScreen() {
                     <div className="flex items-center gap-2">
                       {i === 0 && <span className="text-[8px] font-headline font-bold text-primary bg-primary/10 border border-primary/20 px-1">PRIMARY</span>}
                       <span className="font-headline font-bold text-white text-sm">{attr.name}</span>
+                      {tvl > 0 && tvl < LOW_TVL_THRESHOLD && (
+                        <span className="relative group">
+                          <span className="flex items-center gap-1 text-[8px] font-headline font-bold text-yellow-400 bg-yellow-900/20 border border-yellow-500/30 px-1.5 py-0.5 cursor-help">
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            LOW LIQ
+                          </span>
+                          <span className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block bg-surface-container-low border border-yellow-500/30 px-2 py-1.5 text-[9px] font-headline text-yellow-400 whitespace-nowrap shadow-lg">
+                            Low liquidity — increase slippage to 3%+
+                          </span>
+                        </span>
+                      )}
                     </div>
                     <span className="font-headline text-[10px] uppercase text-on-surface-variant">{dexId || '\u2014'}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
                     <div>
                       <span className="text-on-surface-variant font-headline uppercase text-[9px] block">TVL</span>
-                      <span className="font-headline font-bold text-white">{fmtUsd(tvl)}</span>
+                      <span className={`font-headline font-bold ${tvl > 0 && tvl < LOW_TVL_THRESHOLD ? 'text-yellow-400' : 'text-white'}`}>{fmtUsd(tvl)}</span>
                     </div>
                     <div>
                       <span className="text-on-surface-variant font-headline uppercase text-[9px] block">24H Vol</span>
@@ -174,18 +191,24 @@ export function PoolsScreen() {
                       <span className="text-on-surface-variant font-headline uppercase text-[9px] block">Price</span>
                       <span className="font-headline font-bold text-primary">{fmtUsd(price)}</span>
                     </div>
+                    {refImpact > 0 && (
+                      <div>
+                        <span className="text-on-surface-variant font-headline uppercase text-[9px] block">Impact ($100)</span>
+                        <span className={`font-headline font-bold ${impactColor(refImpact)}`}>~{(refImpact * 100).toFixed(2)}%</span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/10">
                     <button
-                      onClick={() => openLpModal('add', attr.address, attr.name, dexId)}
-                      className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-headline font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black transition-colors cursor-pointer"
+                      onClick={() => openLpModal('add', attr.address, attr.name, dexId, tvl)}
+                      className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-headline font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black transition-colors cursor-pointer whitespace-nowrap"
                     >
                       <Plus className="w-3 h-3" />
                       Add LP
                     </button>
                     <button
-                      onClick={() => openLpModal('remove', attr.address, attr.name, dexId)}
-                      className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-headline font-bold uppercase tracking-widest text-secondary bg-secondary/10 border border-secondary/20 hover:bg-secondary hover:text-white transition-colors cursor-pointer"
+                      onClick={() => openLpModal('remove', attr.address, attr.name, dexId, tvl)}
+                      className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-headline font-bold uppercase tracking-widest text-secondary bg-secondary/10 border border-secondary/20 hover:bg-secondary hover:text-white transition-colors cursor-pointer whitespace-nowrap"
                     >
                       <Minus className="w-3 h-3" />
                       Withdraw
@@ -217,6 +240,7 @@ export function PoolsScreen() {
                   <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">24H Change</th>
                   <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">24H Txns</th>
                   <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">Price</th>
+                  <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">Impact ($100)</th>
                   <th className="px-4 py-3 text-center">Actions</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -230,6 +254,7 @@ export function PoolsScreen() {
                   const change = pctChange(attr.price_change_percentage?.h24);
                   const pTxns = (attr.transactions?.h24?.buys || 0) + (attr.transactions?.h24?.sells || 0);
                   const price = parseFloat(attr.base_token_price_usd || '0');
+                  const refImpact = tvl > 0 ? calcPriceImpact(100, tvl / 2) : 0;
 
                   return (
                     <tr key={pool.id} className={`border-b border-outline-variant/5 hover:bg-surface-container-high transition-colors ${i === 0 ? 'bg-primary/5' : ''}`}>
@@ -237,13 +262,21 @@ export function PoolsScreen() {
                         <div className="flex items-center gap-2">
                           {i === 0 && <span className="text-[8px] font-headline font-bold text-primary bg-primary/10 border border-primary/20 px-1">PRIMARY</span>}
                           <span className="font-headline font-bold text-white text-sm">{attr.name}</span>
+                          {tvl > 0 && tvl < LOW_TVL_THRESHOLD && (
+                            <span className="relative group/liq">
+                              <AlertTriangle className="w-3 h-3 text-yellow-400 shrink-0 cursor-help" />
+                              <span className="absolute left-0 top-full mt-1 z-50 hidden group-hover/liq:block bg-surface-container-low border border-yellow-500/30 px-2 py-1.5 text-[9px] font-headline text-yellow-400 whitespace-nowrap shadow-lg">
+                                Low liquidity — increase slippage to 3%+
+                              </span>
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-headline text-xs uppercase text-on-surface-variant">{dexId || '\u2014'}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className="font-headline text-sm text-white">{fmtUsd(tvl)}</span>
+                        <span className={`font-headline text-sm ${tvl > 0 && tvl < LOW_TVL_THRESHOLD ? 'text-yellow-400' : 'text-white'}`}>{fmtUsd(tvl)}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className="font-headline text-sm text-white">{fmtUsd(pVol24)}</span>
@@ -258,17 +291,20 @@ export function PoolsScreen() {
                         <span className="font-headline text-sm text-primary">{fmtUsd(price)}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
+                        <span className={`font-headline text-sm ${impactColor(refImpact)}`}>{refImpact > 0 ? `~${(refImpact * 100).toFixed(2)}%` : '—'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => openLpModal('add', attr.address, attr.name, dexId)}
-                            className="flex items-center gap-1 px-2 py-1 text-[9px] font-headline font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black transition-colors cursor-pointer"
+                            onClick={() => openLpModal('add', attr.address, attr.name, dexId, tvl)}
+                            className="flex items-center gap-1 px-2 py-1 text-[9px] font-headline font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black transition-colors cursor-pointer whitespace-nowrap"
                             title="Add Liquidity"
                           >
                             <Plus className="w-3 h-3" />
                             <span className="hidden md:inline">Add LP</span>
                           </button>
                           <button
-                            onClick={() => openLpModal('remove', attr.address, attr.name, dexId)}
+                            onClick={() => openLpModal('remove', attr.address, attr.name, dexId, tvl)}
                             className="flex items-center gap-1 px-2 py-1 text-[9px] font-headline font-bold uppercase tracking-widest text-secondary bg-secondary/10 border border-secondary/20 hover:bg-secondary hover:text-white transition-colors cursor-pointer"
                             title="Remove Liquidity"
                           >
@@ -315,6 +351,7 @@ export function PoolsScreen() {
         pairAddress={lpModal.pairAddress}
         poolName={lpModal.poolName}
         dexId={lpModal.dexId}
+        tvl={lpModal.tvl}
       />
     </div>
   );

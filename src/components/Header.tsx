@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { dogechain } from 'wagmi/chains';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, ExternalLink } from 'lucide-react';
 import { WalletModal } from './WalletModal';
 import { useToast } from './ToastContext';
 
@@ -81,6 +81,15 @@ export function Header({ activeTab, setActiveTab }: { activeTab: string, setActi
                 {tab}
               </button>
             ))}
+            <a
+              href="https://dive.dogechain.dog/bridge"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white/60 hover:text-primary transition-all duration-150 px-2 py-1 flex items-center gap-1.5"
+            >
+              BRIDGE
+              <ExternalLink className="w-3 h-3" />
+            </a>
           </nav>
 
           {/* Spacer */}
@@ -120,15 +129,24 @@ export function Header({ activeTab, setActiveTab }: { activeTab: string, setActi
               <button
                 key={tab}
                 onClick={() => handleTabSelect(tab)}
-                className={`font-headline font-bold text-lg tracking-tighter uppercase px-6 py-4 border-b border-outline-variant/10 transition-colors cursor-pointer text-left ${
+                className={`font-headline font-bold text-lg tracking-tighter uppercase px-6 py-4 border-b border-outline-variant/10 transition-colors cursor-pointer text-center ${
                   activeTab === tab
-                    ? 'text-primary bg-primary/5 border-l-4 border-l-primary'
+                    ? 'text-primary bg-primary/5 border-b-2 border-b-primary'
                     : 'text-white/70 hover:text-white hover:bg-surface-container-high'
                 }`}
               >
                 {tab}
               </button>
             ))}
+            <a
+              href="https://dive.dogechain.dog/bridge"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-headline font-bold text-lg tracking-tighter uppercase px-6 py-4 border-b border-outline-variant/10 transition-colors text-white/70 hover:text-primary flex items-center justify-center gap-2"
+            >
+              BRIDGE
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </nav>
         </div>
       )}

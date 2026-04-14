@@ -79,6 +79,34 @@ export function usePoolReserves(pairAddress: string | undefined) {
   return data;
 }
 
+// Resolve the DogeSwap V2 pair address for given tokens (LP tokens live on the DogeSwap pair, not GeckoTerminal's pair)
+export function useDogeswapPair(token0: string | undefined, token1: string | undefined) {
+  const [pair, setPair] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!token0 || !token1) return;
+    let cancelled = false;
+    const fetchPair = async () => {
+      try {
+        const factory = getAddress('0xd27d9d61590874bf9ee2a19b27e265399929c9c3');
+        const addr = await publicReader.readContract({
+          address: factory,
+          abi: parseAbi(['function getPair(address,address) external view returns (address)']),
+          functionName: 'getPair',
+          args: [getAddress(token0), getAddress(token1)],
+        }) as `0x${string}`;
+        if (!cancelled && addr !== '0x0000000000000000000000000000000000000000') {
+          setPair(addr);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchPair();
+    return () => { cancelled = true; };
+  }, [token0, token1]);
+
+  return pair;
+}
+
 // Read user's LP token balance for a pool — uses standalone reader (works without wallet)
 export function useLpBalance(pairAddress: string | undefined) {
   const { address, isConnected } = useAccount();

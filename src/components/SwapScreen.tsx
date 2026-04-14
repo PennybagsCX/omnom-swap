@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Settings, ChevronDown, UtensilsCrossed, Zap, Search, Ghost, X, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useAccount, useBalance, useReadContract, useWriteContract, useChainId, usePublicClient } from 'wagmi';
 import { erc20Abi, parseAbi, parseUnits, formatUnits } from 'viem';
-import { TOKENS, CONTRACTS, NETWORK_INFO, isNativeToken, OMNOM_WWDOGE_POOL, V2_ROUTER_ABI, MAX_UINT256 } from '../lib/constants';
+import { TOKENS, CONTRACTS, NETWORK_INFO, isNativeToken, OMNOM_WWDOGE_POOL, V2_ROUTER_ABI, MAX_UINT256, PRICE_IMPACT_WARN, PRICE_IMPACT_BLOCK, calcPriceImpact, impactColor } from '../lib/constants';
 import { useOmnomData } from '../hooks/useOmnomData';
 import { usePoolReserves } from '../hooks/useLiquidity';
 import { useToast } from './ToastContext';
@@ -16,13 +16,14 @@ interface SwapTx {
   hash?: string;
   time: string;
   status: 'success' | 'failed' | 'pending';
+  priceImpact: number;
 }
 
-const PRICE_IMPACT_WARN = 0.03; // 3%
-const PRICE_IMPACT_BLOCK = 0.10; // 10%
+// Price impact thresholds imported from constants.ts
 
 // Smart price formatting — drop insignificant trailing zeros, show enough precision for micro-prices
-function fmtPrice(n: number): string {
+function fmtPrice(n: number | null): string {
+  if (n === null) return '\u2014';
   if (n === 0) return '$0';
   if (n >= 1) return `$${n.toFixed(2)}`;
   if (n >= 0.01) return `$${n.toFixed(4)}`;
@@ -45,7 +46,8 @@ function fmtAmt(n: number): string {
   return n.toFixed(6);
 }
 
-function fmtUsd(n: number): string {
+function fmtUsd(n: number | null): string {
+  if (n === null) return '\u2014';
   if (n === 0) return '$0';
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
@@ -66,7 +68,17 @@ export function SwapScreen() {
   const [deadline, setDeadline] = useState<string>('5');
   const [showHistory, setShowHistory] = useState(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [swapHistory, setSwapHistory] = useState<SwapTx[]>([]);
+  const [swapHistory, setSwapHistory] = useState<SwapTx[]>(() => {
+    try {
+      const saved = localStorage.getItem('omnom_swap_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+
+  // Persist swap history to localStorage
+  useEffect(() => {
+    try { localStorage.setItem('omnom_swap_history', JSON.stringify(swapHistory.slice(0, 50))); } catch {}
+  }, [swapHistory]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
   const [swapFlip, setSwapFlip] = useState(false);
@@ -122,10 +134,12 @@ export function SwapScreen() {
   const { reserve0: poolRes0, reserve1: poolRes1, token0: poolT0, token1: poolT1 } = usePoolReserves(OMNOM_WWDOGE_POOL);
 
   // Live $OMNOM market data — shared across all components via centralized hook
-  const { priceUsd: omnomPriceUsd, totalVol24: omnomVol24, fdvUsd: omnomFdvUsd } = useOmnomData();
+  const { priceUsd: omnomPriceUsd, totalVol24: omnomVol24, fdvUsd: omnomFdvUsd, mexcPrice, mexcVol24 } = useOmnomData();
   const omnomPrice = fmtPrice(omnomPriceUsd);
   const omnomVol = fmtUsd(omnomVol24);
   const omnomFdv = fmtUsd(omnomFdvUsd);
+  const mexcPriceStr = fmtPrice(mexcPrice);
+  const mexcVolStr = fmtUsd(mexcVol24);
 
   // Price quoting via V2 router (best available on Dogechain)
   const parsedSellWei = parsedSell > 0 ? parseUnits(parsedSell.toString(), 18) : 0n;
@@ -220,8 +234,7 @@ export function SwapScreen() {
     const reserveSell = sellAddr === poolT0.toLowerCase()
       ? Number(formatUnits(poolRes0, 18))
       : Number(formatUnits(poolRes1, 18));
-    if (reserveSell <= 0) return 0;
-    return parsedSell / (reserveSell + parsedSell);
+    return calcPriceImpact(parsedSell, reserveSell);
   })();
 
   // Input validation
@@ -249,9 +262,6 @@ export function SwapScreen() {
     isDisabled = true;
   } else if (inputError) {
     buttonText = inputError.toUpperCase();
-    isDisabled = true;
-  } else if (priceImpact >= PRICE_IMPACT_BLOCK) {
-    buttonText = "PRICE IMPACT TOO HIGH";
     isDisabled = true;
   } else if (exchangeRate <= 0) {
     buttonText = "NO LIQUIDITY";
@@ -405,6 +415,7 @@ export function SwapScreen() {
             id: Date.now(), sellAmount: parsedSell, sellSymbol: sellToken.symbol,
             buyAmount: buyAmountActual, buySymbol: buyToken.symbol,
             hash: swapHash as string, time: 'Just now', status: 'success',
+            priceImpact: priceImpact * 100,
           }, ...prev]);
           setSellAmount('');
           addToast({
@@ -417,6 +428,7 @@ export function SwapScreen() {
             id: Date.now(), sellAmount: parsedSell, sellSymbol: sellToken.symbol,
             buyAmount: 0, buySymbol: buyToken.symbol,
             hash: swapHash as string, time: 'Just now', status: 'failed',
+            priceImpact: priceImpact * 100,
           }, ...prev]);
           addToast({
             type: 'error', title: 'Swap Failed', message: 'Transaction reverted on-chain',
@@ -430,6 +442,7 @@ export function SwapScreen() {
           id: Date.now(), sellAmount: parsedSell, sellSymbol: sellToken.symbol,
           buyAmount: buyAmountActual, buySymbol: buyToken.symbol,
           hash: swapHash as string, time: 'Just now', status: 'success',
+            priceImpact: priceImpact * 100,
         }, ...prev]);
         setSellAmount('');
         addToast({
@@ -460,8 +473,8 @@ export function SwapScreen() {
         {/* Mode badge */}
         <div className="flex justify-center mb-6">
           <div className="border border-secondary/50 px-4 py-1 flex items-center gap-2 bg-secondary/10">
-            <Zap className="text-secondary w-4 h-4" fill="currentColor" />
-            <span className="font-headline font-bold text-secondary text-xs uppercase tracking-widest">Savage Mode</span>
+            <Zap className="text-secondary w-4 h-4 animate-pulse" fill="currentColor" />
+            <span className="font-headline font-bold text-secondary text-xs uppercase tracking-widest animate-pulse">Savage Mode</span>
           </div>
         </div>
 
@@ -516,9 +529,9 @@ export function SwapScreen() {
                         type="number"
                         value={slippage}
                         onChange={(e) => setSlippage(e.target.value)}
-                        className="w-16 bg-surface-container-highest border border-outline-variant/30 text-secondary text-right text-[11px] px-2 py-1.5 focus:border-secondary outline-none"
+                        className="w-16 bg-surface-container-highest border border-outline-variant/30 text-yellow-400 text-right text-[11px] px-2 py-1.5 focus:border-yellow-400 outline-none"
                       />
-                      <span className="text-secondary text-[10px]">%</span>
+                      <span className="text-yellow-400 text-[10px]">%</span>
                     </div>
                     {parseFloat(slippage) > 5 && (
                       <p className="text-[9px] text-yellow-400 mt-1 uppercase">High slippage may result in unfavorable trades</p>
@@ -565,12 +578,8 @@ export function SwapScreen() {
                   onClick={() => setTokenModalSide('sell')}
                   className="sm:hidden bg-surface-container-high px-3 py-2 flex items-center gap-2 border border-outline-variant/15 hover:border-primary/50 transition-colors cursor-pointer mx-auto"
                 >
-                  <div className="w-6 h-6 bg-surface-container-highest flex items-center justify-center">
-                    {sellToken.isImage ? (
-                      <img className="w-5 h-5 grayscale-[0.5]" alt="" src={sellToken.icon as string} />
-                    ) : (
-                      <sellToken.icon className="w-4 h-4 text-white" />
-                    )}
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    <img className="w-5 h-5" alt="" src={sellToken.icon as string} />
                   </div>
                   <span className="font-headline font-bold">{sellToken.symbol}</span>
                   <ChevronDown className="w-4 h-4" />
@@ -587,12 +596,8 @@ export function SwapScreen() {
                     onClick={() => setTokenModalSide('sell')}
                     className="hidden sm:flex bg-surface-container-high px-3 py-2 items-center gap-2 border border-outline-variant/15 hover:border-primary/50 transition-colors cursor-pointer shrink-0"
                   >
-                    <div className="w-6 h-6 bg-surface-container-highest flex items-center justify-center">
-                      {sellToken.isImage ? (
-                        <img className="w-5 h-5 grayscale-[0.5]" alt="" src={sellToken.icon as string} />
-                      ) : (
-                        <sellToken.icon className="w-4 h-4 text-white" />
-                      )}
+                    <div className="w-6 h-6 flex items-center justify-center">
+                      <img className="w-5 h-5" alt="" src={sellToken.icon as string} />
                     </div>
                     <span className="font-headline font-bold">{sellToken.symbol}</span>
                     <ChevronDown className="w-4 h-4" />
@@ -622,12 +627,8 @@ export function SwapScreen() {
                   onClick={() => setTokenModalSide('buy')}
                   className="sm:hidden bg-surface-container-high px-3 py-2 flex items-center gap-2 border border-outline-variant/15 hover:border-primary/50 transition-colors cursor-pointer mx-auto"
                 >
-                  <div className="w-6 h-6 bg-primary flex items-center justify-center">
-                    {buyToken.isImage ? (
-                      <img className="w-5 h-5" alt="" src={buyToken.icon as string} />
-                    ) : (
-                      <buyToken.icon className="w-4 h-4 text-on-primary" />
-                    )}
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    <img className="w-5 h-5" alt="" src={buyToken.icon as string} />
                   </div>
                   <span className="font-headline font-bold">{buyToken.symbol}</span>
                   <ChevronDown className="w-4 h-4" />
@@ -644,12 +645,8 @@ export function SwapScreen() {
                     onClick={() => setTokenModalSide('buy')}
                     className="hidden sm:flex bg-surface-container-high px-3 py-2 items-center gap-2 border border-outline-variant/15 hover:border-primary/50 transition-colors cursor-pointer shrink-0"
                   >
-                    <div className="w-6 h-6 bg-primary flex items-center justify-center">
-                      {buyToken.isImage ? (
-                        <img className="w-5 h-5" alt="" src={buyToken.icon as string} />
-                      ) : (
-                        <buyToken.icon className="w-4 h-4 text-on-primary" />
-                      )}
+                    <div className="w-6 h-6 flex items-center justify-center">
+                      <img className="w-5 h-5" alt="" src={buyToken.icon as string} />
                     </div>
                     <span className="font-headline font-bold">{buyToken.symbol}</span>
                     <ChevronDown className="w-4 h-4" />
@@ -658,27 +655,32 @@ export function SwapScreen() {
               </div>
             </div>
 
-            {/* Price impact warning */}
-            {parsedSell > 0 && priceImpact >= PRICE_IMPACT_WARN && (
-              <div className={`flex items-center gap-2 p-3 text-xs font-headline ${
-                priceImpact >= PRICE_IMPACT_BLOCK
-                  ? 'bg-red-900/20 border border-red-500/30 text-red-400'
-                  : 'bg-yellow-900/20 border border-yellow-500/30 text-yellow-400'
-              }`}>
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span className="uppercase tracking-widest">
-                  Price Impact: ~{(priceImpact * 100).toFixed(1)}%
-                  {priceImpact >= PRICE_IMPACT_BLOCK ? ' — Transaction blocked' : ' — High impact, proceed with caution'}
-                </span>
-              </div>
-            )}
-
             {/* Swap details */}
             <div className="space-y-2 mt-2">
               <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                 <span>Exchange Rate</span>
                 <span className="text-white">{exchangeRate > 0 ? `1 ${sellToken.symbol} = ${exchangeRate.toFixed(6)} ${buyToken.symbol}` : '—'}</span>
               </div>
+              <div className="flex justify-between items-center text-xs font-headline text-on-surface-variant uppercase">
+                <span>Price Impact</span>
+                <span className={`font-bold ${parsedSell > 0 ? impactColor(priceImpact) : 'text-on-surface-variant'}`}>
+                  {parsedSell > 0
+                    ? `~${(priceImpact * 100).toFixed(2)}%`
+                    : '—'}
+                </span>
+              </div>
+              {parsedSell > 0 && priceImpact >= PRICE_IMPACT_WARN && (
+                <div className={`flex items-center gap-2 p-2 text-xs font-headline ${
+                  priceImpact >= PRICE_IMPACT_BLOCK
+                    ? 'bg-red-900/20 border border-red-500/30 text-red-400'
+                    : 'bg-yellow-900/20 border border-yellow-500/30 text-yellow-400'
+                }`}>
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span className="uppercase tracking-widest text-[10px]">
+                    {priceImpact >= PRICE_IMPACT_BLOCK ? 'Extreme impact — you may lose significant value' : 'High impact — proceed with caution'}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-xs font-headline text-on-surface-variant uppercase">
                 <span>Slippage Tolerance</span>
                 <span className="text-secondary">{slippage}%</span>
@@ -743,20 +745,23 @@ export function SwapScreen() {
                     tx.sellSymbol.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
                     tx.buySymbol.toLowerCase().includes(historySearchQuery.toLowerCase())
                   ).map(tx => (
-                    <div key={tx.id} className="flex justify-between items-center text-sm border-b border-outline-variant/10 pb-2 last:border-0 last:pb-0">
-                      <div className="flex items-center gap-2">
+                    <div key={tx.id} className="border-b border-outline-variant/10 pb-2 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-1.5 text-xs flex-wrap">
                         <span className="font-bold text-white">{tx.sellAmount} {tx.sellSymbol}</span>
-                        <UtensilsCrossed className="w-3 h-3 text-on-surface-variant rotate-90" />
+                        <UtensilsCrossed className="w-2.5 h-2.5 text-on-surface-variant rotate-90 shrink-0" />
                         <span className="font-bold text-primary">{tx.buyAmount} {tx.buySymbol}</span>
-                        {tx.hash && (
-                          <a href={`${NETWORK_INFO.blockExplorer}/tx/${tx.hash}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary">
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
+                        <span className={`text-[9px] font-headline font-bold shrink-0 ${(tx.priceImpact ?? 0) >= PRICE_IMPACT_WARN * 100 ? 'text-yellow-400' : 'text-green-400'}`}>{(tx.priceImpact ?? 0).toFixed(1)}%</span>
                       </div>
-                      <div className="text-right">
-                        <div className="text-xs text-on-surface-variant">{tx.time}</div>
-                        <div className={`text-[10px] font-bold uppercase ${tx.status === 'success' ? 'text-green-400' : tx.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>{tx.status}</div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-on-surface-variant">{tx.time}</span>
+                          {tx.hash && (
+                            <a href={`${NETWORK_INFO.blockExplorer}/tx/${tx.hash}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary">
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                        <span className={`text-[9px] font-bold uppercase ${tx.status === 'success' ? 'text-green-400' : tx.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>{tx.status}</span>
                       </div>
                     </div>
                   ))}
@@ -780,27 +785,40 @@ export function SwapScreen() {
 
         {/* Market data cards — $OMNOM stats */}
         <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="bg-surface-container-low p-4 border-b-2 border-primary text-center shadow-[0_4px_10px_rgba(255,215,0,0.1)]">
+          <div className="bg-surface-container-low p-4 border-b-2 border-primary text-center flex flex-col items-center justify-center shadow-[0_4px_10px_rgba(255,215,0,0.1)]">
             <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">$OMNOM Price</p>
-            <p className="font-headline font-bold text-white">{omnomPrice}</p>
-            <p className="text-[10px] font-headline text-primary">LIVE</p>
+            <p className="font-headline font-bold text-white whitespace-nowrap">{omnomPrice}</p>
+            <p className="text-[10px] font-headline text-primary">ON CHAIN</p>
           </div>
-          <div className="bg-surface-container-low p-4 border-b-2 border-secondary text-center">
-            <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">$OMNOM FDV</p>
-            <p className="font-headline font-bold text-white">{omnomFdv}</p>
+          <div className="bg-surface-container-low p-4 border-b-2 border-green-400 text-center flex flex-col items-center justify-center">
+            <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">$OMNOM 24H Vol</p>
+            <p className="font-headline font-bold text-white whitespace-nowrap">{omnomVol}</p>
+            <p className="text-[10px] font-headline text-green-400">ON CHAIN</p>
+          </div>
+          <div className="bg-surface-container-low p-4 border-b-2 border-secondary text-center flex flex-col items-center justify-center col-span-2 sm:col-span-1">
+            <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">$OMNOM Market Cap</p>
+            <p className="font-headline font-bold text-white whitespace-nowrap">{omnomFdv}</p>
             <p className="text-[10px] font-headline text-secondary">BEAST MODE</p>
           </div>
-          <div className="bg-surface-container-low p-4 border-b-2 border-outline-variant/50 text-center col-span-2 sm:col-span-1">
-            <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">$OMNOM 24H Vol</p>
-            <p className="font-headline font-bold text-white">{omnomVol}</p>
-            <p className="text-[10px] font-headline text-on-surface-variant">ON CHAIN</p>
+        </div>
+
+        {/* MEXC CEX data tiles */}
+        <div className="mt-4 grid grid-cols-2 gap-4">
+          <div className="bg-surface-container-low p-4 border-b-2 text-center flex flex-col items-center justify-center" style={{ borderBottomColor: 'rgb(41, 91, 249)' }}>
+            <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">MEXC $OMNOM Price</p>
+            <p className="font-headline font-bold text-white whitespace-nowrap">{mexcPriceStr}</p>
+            <p className="text-[10px] font-headline" style={{ color: 'rgb(41, 91, 249)' }}>CEX</p>
+          </div>
+          <div className="bg-surface-container-low p-4 border-b-2 text-center flex flex-col items-center justify-center" style={{ borderBottomColor: 'rgba(41, 91, 249, 0.6)' }}>
+            <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">MEXC $OMNOM 24H Vol</p>
+            <p className="font-headline font-bold text-white">{mexcVolStr}</p>
+            <p className="text-[10px] font-headline" style={{ color: 'rgb(41, 91, 249)' }}>CEX</p>
           </div>
         </div>
-      </div>
 
-      {/* Token selection modal */}
+      </div>
       {tokenModalSide && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) { setTokenModalSide(null); setSearchQuery(''); }}}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) { setTokenModalSide(null); setSearchQuery(''); }}}>
           <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center p-4 border-b border-outline-variant/15 shrink-0">
               <h3 className="font-headline font-bold text-xl uppercase tracking-tight text-white">Select Token</h3>
@@ -830,12 +848,8 @@ export function SwapScreen() {
                   className="w-full flex items-center justify-between p-4 hover:bg-surface-container-high transition-colors border-b border-outline-variant/5 last:border-0 group cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-surface-container-highest flex items-center justify-center border border-outline-variant/30 group-hover:border-primary/50 transition-colors">
-                      {token.isImage ? (
-                        <img src={token.icon as string} alt="" className="w-6 h-6 grayscale-[0.5] group-hover:grayscale-0" />
-                      ) : (
-                        <token.icon className="w-5 h-5 text-white group-hover:text-primary transition-colors" />
-                      )}
+                    <div className="w-10 h-10 flex items-center justify-center">
+                      <img src={token.icon as string} alt="" className="w-6 h-6" />
                     </div>
                     <div className="text-left">
                       <div className="font-headline font-bold text-white uppercase">{token.symbol}</div>
@@ -855,7 +869,7 @@ export function SwapScreen() {
 
       {/* Confirmation modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget && !isSwapping) setShowConfirmModal(false); }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget && !isSwapping) setShowConfirmModal(false); }}>
           <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
             {isSwapping ? (
               <div className="flex flex-col items-center justify-center py-12">
@@ -891,6 +905,10 @@ export function SwapScreen() {
                   <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                     <span>Rate</span>
                     <span className="text-white">1 {sellToken.symbol} = {exchangeRate.toFixed(6)} {buyToken.symbol}</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
+                    <span>Price Impact</span>
+                    <span className={`font-bold ${impactColor(priceImpact)}`}>~{(priceImpact * 100).toFixed(2)}%</span>
                   </div>
                   <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                     <span>Slippage</span>

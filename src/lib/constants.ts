@@ -1,4 +1,3 @@
-import { PawPrint, Bitcoin, Dog } from 'lucide-react';
 
 export const NETWORK_INFO = {
   chainId: 2000,
@@ -18,19 +17,39 @@ export const CONTRACTS = {
   DINU_TOKEN: '0x8a764cf73438de795c98707b07034e577af54825',
 }
 
+// Dogechain Bubblemaps — deep-link URL for $OMNOM holder bubble map
+export const BUBBLEMAP_URL = `https://www.dogechain-bubblemaps.xyz/?token=${CONTRACTS.OMNOM_TOKEN}&view=analysis&type=TOKEN`;
+
 // OMNOM/WWDOGE pool - the primary pool for this DEX
 export const OMNOM_WWDOGE_POOL = '0x5bf60ea5cf2383f407f09cf38378176298238a6c';
 
 export const TOKENS = [
-  { symbol: 'WWDOGE', name: 'Wrapped Doge', balance: 0, address: CONTRACTS.WWDOGE, icon: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD33Ssm2WE6hLYmOKHoQGa8bgIWiahDkvTIHWLsSoH4nr303LaV7pMAJoqpEy9xlEZHDBwLAuCEyodi7A31ysbQwltZJe2zu4TawtiwvEF13jQ_U5bDEBghLERSdxgO3PuV2ZXoiPtwgkZti4BK0WsZUQ9R-4o6H1HIdz1Nmnymlq1kLWUovyO8go9zoontFfDgSnPPUdprcHOWXncXjSywG7XsDQxJwB6c1gXbyeoXcY7Ibk1h6xH3jzo72x80PNC4xP8HSZ7KhKFp', isImage: true, isNative: true },
-  { symbol: 'OMNOM', name: 'DogeEatDoge', balance: 0, address: CONTRACTS.OMNOM_TOKEN, icon: PawPrint, isImage: false },
-  { symbol: 'DC', name: 'DogeChain Token', balance: 0, address: CONTRACTS.DC_TOKEN, icon: Bitcoin, isImage: false },
-  { symbol: 'DINU', name: 'Doge Inu', balance: 0, address: CONTRACTS.DINU_TOKEN, icon: Dog, isImage: false },
+  { symbol: 'WWDOGE', name: 'Wrapped Doge', balance: 0, address: CONTRACTS.WWDOGE, icon: '/tokens/wwdoge.webp', isImage: true, isNative: true },
+  { symbol: 'OMNOM', name: 'DogeEatDoge', balance: 0, address: CONTRACTS.OMNOM_TOKEN, icon: '/tokens/omnom.png', isImage: true },
+  { symbol: 'DC', name: 'DogeChain Token', balance: 0, address: CONTRACTS.DC_TOKEN, icon: '/tokens/dc.webp', isImage: true },
+  { symbol: 'DINU', name: 'Doge Inu', balance: 0, address: CONTRACTS.DINU_TOKEN, icon: '/tokens/dinu.webp', isImage: true },
 ];
 
 // Helper to check if a token is native WWDOGE/DOGE
 export function isNativeToken(token: { symbol: string; address: string }): boolean {
   return token.symbol === 'WWDOGE' || token.symbol === 'DOGE' || token.address === CONTRACTS.WWDOGE;
+}
+
+// Price impact thresholds (fractions, not percentages)
+export const PRICE_IMPACT_LOW = 0.01;    // 1% — green, negligible
+export const PRICE_IMPACT_WARN = 0.03;   // 3% — yellow, caution
+export const PRICE_IMPACT_BLOCK = 0.10;  // 10% — red, transaction blocked
+
+export function calcPriceImpact(amountIn: number, reserveIn: number): number {
+  if (amountIn <= 0 || reserveIn <= 0) return 0;
+  return amountIn / (reserveIn + amountIn);
+}
+
+export function impactColor(impact: number): string {
+  if (impact >= PRICE_IMPACT_BLOCK) return 'text-red-400';
+  if (impact >= PRICE_IMPACT_WARN) return 'text-yellow-400';
+  if (impact >= PRICE_IMPACT_LOW) return 'text-white';
+  return 'text-green-400';
 }
 
 // Max uint256 for unlimited approvals

@@ -6,6 +6,7 @@ import { TOKENS, NETWORK_INFO, CONTRACTS } from '../lib/constants';
 import {
   usePoolReserves,
   useLpBalance,
+  useDogeswapPair,
   useErc20Balances,
   useAddLiquidity,
   useRemoveLiquidity,
@@ -21,6 +22,7 @@ interface LiquidityModalProps {
   pairAddress: string;
   poolName: string;
   dexId: string;
+  tvl?: number;
 }
 
 function tokenSymbol(address: string | undefined): string {
@@ -30,17 +32,32 @@ function tokenSymbol(address: string | undefined): string {
   return known ? known.symbol : `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
-export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, dexId }: LiquidityModalProps) {
+// Format LP balance — shows enough precision for very small positions
+function fmtLp(val: bigint): string {
+  const n = Number(formatUnits(val, 18));
+  if (n === 0) return '0';
+  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  if (n >= 0.0001) return n.toFixed(6);
+  // For tiny amounts, show scientific notation
+  return n.toExponential(4);
+}
+
+export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, dexId, tvl }: LiquidityModalProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const isWrongNetwork = isConnected && chainId !== NETWORK_INFO.chainId;
   const isV3 = dexId === 'quickswap_dogechain';
 
-  // Pool data — only reads for V2 pools (V3 uses different contract interface)
-  const { reserve0, reserve1, token0, token1, symbol0, symbol1, totalSupply, isLoading: isPoolLoading } = usePoolReserves(
+  // Pool data — read from GeckoTerminal's pair to get token addresses
+  const { token0, token1, symbol0, symbol1 } = usePoolReserves(
     isV3 ? undefined : pairAddress,
   );
-  const { lpBalance, refetch: refetchLp } = useLpBalance(pairAddress);
+  // Resolve the DogeSwap pair — LP tokens, reserves, and totalSupply live here
+  const dogeswapPair = useDogeswapPair(token0 as string | undefined, token1 as string | undefined);
+  const { reserve0, reserve1, totalSupply, isLoading: isPoolLoading } = usePoolReserves(
+    isV3 ? undefined : (dogeswapPair ?? pairAddress),
+  );
+  const { lpBalance, refetch: refetchLp } = useLpBalance(dogeswapPair ?? pairAddress);
 
   // Token balances — also reads native DOGE if token is WWDOGE
   const { balanceA: rawBalA, balanceB: rawBalB, nativeBalance, isLoading: isLoadingBalances } = useErc20Balances(
@@ -65,7 +82,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   // Add LP state
   const [amountA, setAmountA] = useState('');
   const [amountB, setAmountB] = useState('');
-  const [slippage, setSlippage] = useState('1.0');
+  const [slippage, setSlippage] = useState('3.0');
   const [deadline, setDeadline] = useState('5');
 
   // Remove LP state
@@ -201,7 +218,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   // V3 pools can't do LP in Phase 1
   if (isV3) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-headline font-black text-xl uppercase tracking-tighter text-white">{poolName}</h2>
@@ -225,8 +242,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const symB = symbol1 || tokenSymbol(token1);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}>
-      <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}>
+      <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] flex flex-col max-h-[80vh] my-auto" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-outline-variant/15 shrink-0">
           <div className="flex items-center gap-3">
@@ -262,6 +279,19 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
             {poolRatio > 0 && (
               <div className="text-[10px] text-on-surface-variant mt-1">
                 1 {symA} = {poolRatio.toFixed(6)} {symB}
+              </div>
+            )}
+            {/* Low-liquidity warning */}
+            {(reserve0 === 0n || reserve1 === 0n) && (
+              <div className="flex items-center gap-2 mt-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 p-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span className="uppercase tracking-widest">Empty pool — first LP sets the ratio. Use high slippage (5%+).</span>
+              </div>
+            )}
+            {totalSupply > 0n && totalSupply < parseUnits('100', 18) && (
+              <div className="flex items-center gap-2 mt-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 p-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span className="uppercase tracking-widest">Low-liquidity pool — high slippage recommended (3%+).</span>
               </div>
             )}
           </div>
@@ -378,7 +408,20 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
               {/* Your LP balance */}
               {lpBalance > 0n && (
                 <div className="text-xs font-headline text-on-surface-variant uppercase">
-                  Your LP Balance: {Number(formatUnits(lpBalance, 18)).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                  Your LP Balance: {fmtLp(lpBalance)}
+                </div>
+              )}
+
+              {/* Low-liquidity warning for Add LP */}
+              {((tvl !== undefined && tvl > 0 && tvl < 500) || (reserve0 > 0n && totalSupply < parseUnits('1000', 18))) && (
+                <div className="flex items-start gap-2 p-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="uppercase tracking-widest">
+                    <span className="font-bold">Low-Liquidity Pool</span>
+                    <span className="block mt-1 normal-case tracking-normal text-yellow-400/80">
+                      This pool has limited liquidity. If your transaction fails, increase slippage to 3-5% and try again.
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -409,7 +452,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
               <div className="bg-surface-container p-4 border-l-4 border-secondary">
                 <span className="text-[10px] font-headline uppercase tracking-widest text-on-surface-variant block mb-1">Your LP Tokens</span>
                 <span className="font-headline font-bold text-xl text-white">
-                  {Number(formatUnits(lpBalance, 18)).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                  {fmtLp(lpBalance)}
                 </span>
               </div>
 
@@ -503,7 +546,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
       {/* Remove LP confirmation overlay */}
       {showRemoveConfirm && !isPending && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowRemoveConfirm(false); }}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center pt-20 pb-4 px-4 bg-black/70 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) setShowRemoveConfirm(false); }}>
           <div className="bg-surface-container-low border border-secondary/30 w-full max-w-sm shadow-[0_0_50px_rgba(157,0,255,0.15)] p-6" onClick={e => e.stopPropagation()}>
             <h3 className="font-headline font-black text-xl uppercase tracking-tighter text-white mb-4 border-b border-outline-variant/15 pb-3">Confirm Withdrawal</h3>
 

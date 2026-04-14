@@ -214,26 +214,50 @@ export function useOmnomData() {
       return tb - ta;
     });
 
-  // ── Aggregated stats across ALL pools ──
+  // ── Error-aware states — null when query errored with no data ──
+  const poolHasError = !!poolQuery.error && !p;
+  const poolsListHasError = !!poolsListQuery.error && allPools.length === 0;
 
-  const totalTvl = allPools.reduce((sum, pl) => sum + (Number(pl.attributes.reserve_in_usd) || 0), 0);
-  const totalVol24 = allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h24) || 0), 0);
-  const totalVol6 = allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h6) || 0), 0);
-  const totalVol1 = allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h1) || 0), 0);
-  const totalTxns24 = allPools.reduce((sum, pl) => ({
+  // ── Aggregated stats across ALL pools ──
+  const totalTvl: number | null = poolsListHasError ? null : allPools.reduce((sum, pl) => sum + (Number(pl.attributes.reserve_in_usd) || 0), 0);
+  const totalVol24: number | null = poolsListHasError ? null : allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h24) || 0), 0);
+  const totalVol6: number | null = poolsListHasError ? null : allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h6) || 0), 0);
+  const totalVol1: number | null = poolsListHasError ? null : allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h1) || 0), 0);
+  const totalTxns24: { buys: number; sells: number } | null = poolsListHasError ? null : allPools.reduce((sum, pl) => ({
     buys: sum.buys + (pl.attributes.transactions?.h24?.buys || 0),
     sells: sum.sells + (pl.attributes.transactions?.h24?.sells || 0),
   }), { buys: 0, sells: 0 });
-  const totalTxns6 = allPools.reduce((sum, pl) => ({
+  const totalTxns6: { buys: number; sells: number } | null = poolsListHasError ? null : allPools.reduce((sum, pl) => ({
     buys: sum.buys + (pl.attributes.transactions?.h6?.buys || 0),
     sells: sum.sells + (pl.attributes.transactions?.h6?.sells || 0),
   }), { buys: 0, sells: 0 });
 
   // ── Price from primary pool ──
-  const priceUsd = p ? Number(p.base_token_price_usd) || 0 : 0;
-  const fdvUsd = p ? Number(p.fdv_usd) || 0 : 0;
-  const marketCapUsd = p ? Number(p.market_cap_usd) || 0 : 0;
-  const priceChange24 = p?.price_change_percentage?.h24 ? parseFloat(p.price_change_percentage.h24) : null;
+  const priceUsd: number | null = poolHasError ? null : (p ? Number(p.base_token_price_usd) || 0 : 0);
+  const fdvUsd: number | null = poolHasError ? null : (p ? Number(p.fdv_usd) || 0 : 0);
+  const marketCapUsd: number | null = poolHasError ? null : (p ? Number(p.market_cap_usd) || 0 : 0);
+  const priceChange24 = poolHasError ? null : (p?.price_change_percentage?.h24 ? parseFloat(p.price_change_percentage.h24) : null);
+
+  // ── MEXC CEX price/volume ──
+  const mexcQuery = useQuery({
+    queryKey: ['mexcOmnom'],
+    queryFn: async (): Promise<{ price: number; volume24: number }> => {
+      const res = await fetch('/api/mexc/api/v3/ticker/24hr?symbol=OMNOMUSDT');
+      if (!res.ok) throw new Error(`MEXC HTTP ${res.status}`);
+      const json = await res.json();
+      return {
+        price: Number(json.lastPrice) || 0,
+        volume24: Number(json.quoteVolume) || 0,
+      };
+    },
+    ...baseOpts,
+    staleTime: FAST_STALE,
+    refetchInterval: FAST_STALE,
+  });
+
+  const mexcHasError = !!mexcQuery.error && !mexcQuery.data;
+  const mexcPrice: number | null = mexcHasError ? null : (mexcQuery.data?.price ?? 0);
+  const mexcVol24: number | null = mexcHasError ? null : (mexcQuery.data?.volume24 ?? 0);
 
   return {
     pool: p,
@@ -243,6 +267,9 @@ export function useOmnomData() {
 
     // Price (from primary pool)
     priceUsd, fdvUsd, marketCapUsd, priceChange24,
+
+    // MEXC CEX
+    mexcPrice, mexcVol24,
 
     // Aggregated across ALL pools
     totalTvl,

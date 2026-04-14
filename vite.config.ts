@@ -18,6 +18,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/api\/gecko/, '/api/v2'),
       },
+      '/api/mexc': {
+        target: 'https://api.mexc.com',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/api\/mexc/, ''),
+      },
     },
   },
   build: {

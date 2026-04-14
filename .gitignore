@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Build output
+dist/
+
 # Logs
 *.log
 npm-debug.log*
@@ -21,3 +24,24 @@ coverage/
 # Pack artifacts
 *.tgz
 .worktrees/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Agent/tooling config (not part of the project)
+.agent/
+.audit/
+.ck/
+.superset/
+.context/
+.claude/
+
+# Temporary scripts
+edit_swap.cjs
+edit_swap.js
+apply_live_data.cjs
+
+# Empty metadata
+metadata.json

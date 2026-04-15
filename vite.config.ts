@@ -35,5 +35,9 @@ export default defineConfig({
         }
       }
     }
-  }
+  },
+  // Strip all console.* methods in production builds — app uses ErrorBoundary + toast notifications for error handling
+  esbuild: {
+    drop: process.env.NODE_ENV === 'production' ? ['console'] : [],
+  },
 });

@@ -6,8 +6,15 @@ import { StatsScreen } from './components/StatsScreen';
 import { ToastProvider } from './components/ToastContext';
 import { Construction, Lock } from 'lucide-react';
 
-// TODO: Move ADMIN_PIN to environment variable or server-side validation for production
-const ADMIN_PIN = '696985';
+// SHA-256 hash of the admin PIN — avoids storing the plaintext secret in source code
+const ADMIN_PIN_HASH = 'da27aaafac63500f67045ee72fe62f96cb814a00801460539a902d80dbb98b6a';
+
+/** Verify a PIN input against the stored SHA-256 hash using Web Crypto API. */
+async function verifyPin(input: string): Promise<boolean> {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(x => x.toString(16).padStart(2, '0')).join('');
+  return hashHex === ADMIN_PIN_HASH;
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'SWAP' | 'POOLS' | 'STATS'>('SWAP');
@@ -47,10 +54,14 @@ export default function App() {
 export function LockedScreen({ title, subtitle, icon, onUnlock }: { title: string, subtitle: string, icon: React.ReactNode, onUnlock: () => void }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === ADMIN_PIN) {
+    setVerifying(true);
+    const valid = await verifyPin(pin);
+    setVerifying(false);
+    if (valid) {
       onUnlock();
     } else {
       setError(true);
@@ -89,9 +100,10 @@ export function LockedScreen({ title, subtitle, icon, onUnlock }: { title: strin
           )}
           <button
             type="submit"
-            className="px-8 py-2 font-headline font-black uppercase tracking-widest text-sm bg-primary text-black hover:bg-white hover:text-black transition-colors cursor-pointer"
+            disabled={verifying}
+            className="px-8 py-2 font-headline font-black uppercase tracking-widest text-sm bg-primary text-black hover:bg-white hover:text-black transition-colors cursor-pointer disabled:opacity-50"
           >
-            Unlock
+            {verifying ? 'Verifying...' : 'Unlock'}
           </button>
         </form>
       </div>

@@ -171,8 +171,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   }, [ratioX96, decimals0, decimals1]);
 
   const parsedSlippage = parseFloat(slippage) || 1;
-  const slippageError = parsedSlippage <= 0 ? 'Slippage must be > 0%' : '';
-  const slippageWarning = parsedSlippage > 5 ? 'High slippage may result in unfavorable execution' : '';
+  const slippageError = parsedSlippage <= 0 ? 'Slippage must be > 0%' : parsedSlippage > 50 ? 'Slippage tolerance too high. Maximum is 50%.' : '';
+  const slippageWarning = !slippageError && parsedSlippage > 5 ? 'High slippage may result in unfavorable execution' : '';
   const parsedA = parseFloat(amountA) || 0;
   const parsedB = parseFloat(amountB) || 0;
   const balancesLoaded = !isLoadingBalances;
@@ -432,6 +432,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                       type="number"
                       value={slippage}
                       onChange={(e) => setSlippage(e.target.value)}
+                      min="0.01"
+                      max="50"
                       className="w-full bg-surface-container-highest border border-outline-variant/30 text-white text-right text-xs px-2 py-1.5 focus:border-primary outline-none"
                       disabled={isPending}
                     />
@@ -567,6 +569,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                   type="number"
                   value={slippage}
                   onChange={(e) => setSlippage(e.target.value)}
+                  min="0.01"
+                  max="50"
                   className="w-20 bg-surface-container-highest border border-outline-variant/30 text-white text-right text-xs px-2 py-1.5 focus:border-primary outline-none"
                   disabled={isPending}
                 />

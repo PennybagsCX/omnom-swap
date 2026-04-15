@@ -4,7 +4,7 @@ import { useAccount, useBalance, useReadContract, useWriteContract, useChainId, 
 import { erc20Abi, parseAbi, parseUnits, formatUnits } from 'viem';
 import { TOKENS, CONTRACTS, NETWORK_INFO, isNativeToken, OMNOM_WWDOGE_POOL, V2_ROUTER_ABI, MAX_UINT256, PRICE_IMPACT_WARN, PRICE_IMPACT_BLOCK, calcPriceImpact, impactColor } from '../lib/constants';
 import { useOmnomData } from '../hooks/useOmnomData';
-import { usePoolReserves } from '../hooks/useLiquidity';
+import { usePoolReserves, useTokenDecimals } from '../hooks/useLiquidity';
 import { useToast } from './ToastContext';
 
 interface SwapTx {
@@ -17,6 +17,23 @@ interface SwapTx {
   time: string;
   status: 'success' | 'failed' | 'pending';
   priceImpact: number;
+}
+
+/** Type guard to validate swap history loaded from localStorage */
+function isValidSwapTx(obj: unknown): obj is SwapTx {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const tx = obj as Record<string, unknown>;
+  return (
+    typeof tx.id === 'number' &&
+    typeof tx.sellAmount === 'number' &&
+    typeof tx.sellSymbol === 'string' &&
+    typeof tx.buyAmount === 'number' &&
+    typeof tx.buySymbol === 'string' &&
+    (tx.hash === undefined || typeof tx.hash === 'string') &&
+    typeof tx.time === 'string' &&
+    (tx.status === 'success' || tx.status === 'failed' || tx.status === 'pending') &&
+    typeof tx.priceImpact === 'number'
+  );
 }
 
 // Price impact thresholds imported from constants.ts
@@ -68,10 +85,14 @@ export function SwapScreen() {
   const [deadline, setDeadline] = useState<string>('5');
   const [showHistory, setShowHistory] = useState(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
+  // Load swap history from localStorage with validation (Fix 5)
   const [swapHistory, setSwapHistory] = useState<SwapTx[]>(() => {
     try {
       const saved = localStorage.getItem('omnom_swap_history');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed: unknown = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(isValidSwapTx);
     } catch { return []; }
   });
 
@@ -86,6 +107,10 @@ export function SwapScreen() {
   const chainId = useChainId();
   const isWrongNetwork = isConnected && chainId !== NETWORK_INFO.chainId;
   const { addToast } = useToast();
+
+  // Dynamic decimals from token contracts (Fix 4)
+  const sellDecimals = useTokenDecimals(sellToken?.address);
+  const buyDecimals = useTokenDecimals(buyToken?.address);
 
   const { writeContractAsync: writeContract } = useWriteContract();
 
@@ -112,7 +137,7 @@ export function SwapScreen() {
     if (isNativeToken(sellToken)) {
       return sellNativeBalance.data ? Number(formatUnits(sellNativeBalance.data.value, sellNativeBalance.data.decimals)) : 0;
     }
-    return sellErc20Balance.data ? Number(formatUnits(sellErc20Balance.data as bigint, 18)) : 0;
+    return sellErc20Balance.data ? Number(formatUnits(sellErc20Balance.data as bigint, sellDecimals)) : 0;
   })();
 
   const displayBuyBalance = (() => {
@@ -120,7 +145,7 @@ export function SwapScreen() {
     if (isNativeToken(buyToken)) {
       return buyNativeBalance.data ? Number(formatUnits(buyNativeBalance.data.value, buyNativeBalance.data.decimals)) : 0;
     }
-    return buyErc20Balance.data ? Number(formatUnits(buyErc20Balance.data as bigint, 18)) : 0;
+    return buyErc20Balance.data ? Number(formatUnits(buyErc20Balance.data as bigint, buyDecimals)) : 0;
   })();
 
   const filteredTokens = TOKENS.filter(t =>
@@ -142,7 +167,7 @@ export function SwapScreen() {
   const mexcVolStr = fmtUsd(mexcVol24);
 
   // Price quoting via V2 router (best available on Dogechain)
-  const parsedSellWei = parsedSell > 0 ? parseUnits(parsedSell.toString(), 18) : 0n;
+  const parsedSellWei = parsedSell > 0 ? parseUnits(parsedSell.toString(), sellDecimals) : 0n;
 
   const getRouterPath = useCallback((from: typeof TOKENS[0], to: typeof TOKENS[0]) => {
     const fromAddr = isNativeToken(from) || from.symbol === 'DC'
@@ -199,7 +224,7 @@ export function SwapScreen() {
     if (reserveSell <= 0n || reserveBuy <= 0n) return 0;
     // V2 AMM with 0.3% fee: amountOut = reserveBuy * amountIn * 997 / (reserveSell * 1000 + amountIn * 997)
     const buyWei = (reserveBuy * parsedSellWei * 997n) / (reserveSell * 1000n + parsedSellWei * 997n);
-    return Number(formatUnits(buyWei, 18)) / parsedSell;
+    return Number(formatUnits(buyWei, buyDecimals)) / parsedSell;
   })();
 
   useEffect(() => {
@@ -208,11 +233,11 @@ export function SwapScreen() {
     if (poolBasedRate > 0) {
       setExchangeRate(poolBasedRate);
     } else if (v3Quote !== undefined && v3Quote !== null && parsedSellWei > 0n) {
-      const outAmount = formatUnits(v3Quote as bigint, 18);
+      const outAmount = formatUnits(v3Quote as bigint, buyDecimals);
       const rate = Number(outAmount) / parsedSell;
       setExchangeRate(rate);
     } else if (v2AmountsOut && (v2AmountsOut as bigint[]).length === 2 && parsedSellWei > 0n) {
-      const outAmount = formatUnits((v2AmountsOut as bigint[])[1], 18);
+      const outAmount = formatUnits((v2AmountsOut as bigint[])[1], buyDecimals);
       const rate = Number(outAmount) / parsedSell;
       setExchangeRate(rate);
     } else if (sellToken.address === buyToken.address || sellToken.symbol === buyToken.symbol) {
@@ -224,6 +249,7 @@ export function SwapScreen() {
 
   // Calculations
   const parsedSlippage = parseFloat(slippage) || 0;
+  const slippageTooHigh = parsedSlippage > 50; // Fix 2: upper-bound validation
   const buyAmount = exchangeRate > 0 ? fmtAmt(parsedSell * exchangeRate) : '0';
   const minReceived = exchangeRate > 0 ? fmtAmt(parsedSell * exchangeRate * (1 - parsedSlippage / 100)) : '0';
 
@@ -232,8 +258,8 @@ export function SwapScreen() {
     if (parsedSell <= 0 || !poolT0) return 0;
     const sellAddr = (isNativeToken(sellToken) ? CONTRACTS.WWDOGE : sellToken.address).toLowerCase();
     const reserveSell = sellAddr === poolT0.toLowerCase()
-      ? Number(formatUnits(poolRes0, 18))
-      : Number(formatUnits(poolRes1, 18));
+      ? Number(formatUnits(poolRes0, sellDecimals))
+      : Number(formatUnits(poolRes1, buyDecimals));
     return calcPriceImpact(parsedSell, reserveSell);
   })();
 
@@ -262,6 +288,9 @@ export function SwapScreen() {
     isDisabled = true;
   } else if (inputError) {
     buttonText = inputError.toUpperCase();
+    isDisabled = true;
+  } else if (slippageTooHigh) {
+    buttonText = "SLIPPAGE TOO HIGH";
     isDisabled = true;
   } else if (exchangeRate <= 0) {
     buttonText = "NO LIQUIDITY";
@@ -409,7 +438,7 @@ export function SwapScreen() {
         setShowConfirmModal(false);
 
         if (receipt.status === 'success') {
-          const buyAmountActual = Number(formatUnits(buyWeiOut, 18));
+          const buyAmountActual = Number(formatUnits(buyWeiOut, buyDecimals));
           setSwapHistory(prev => [{
             id: Date.now(), sellAmount: parsedSell, sellSymbol: sellToken.symbol,
             buyAmount: buyAmountActual, buySymbol: buyToken.symbol,
@@ -436,7 +465,7 @@ export function SwapScreen() {
         }
       } else {
         setShowConfirmModal(false);
-        const buyAmountActual = Number(formatUnits(buyWeiOut, 18));
+        const buyAmountActual = Number(formatUnits(buyWeiOut, buyDecimals));
         setSwapHistory(prev => [{
           id: Date.now(), sellAmount: parsedSell, sellSymbol: sellToken.symbol,
           buyAmount: buyAmountActual, buySymbol: buyToken.symbol,
@@ -528,13 +557,17 @@ export function SwapScreen() {
                         type="number"
                         value={slippage}
                         onChange={(e) => setSlippage(e.target.value)}
+                        min="0.01"
+                        max="50"
                         className="w-16 bg-surface-container-highest border border-outline-variant/30 text-yellow-400 text-right text-[11px] px-2 py-1.5 focus:border-yellow-400 outline-none"
                       />
                       <span className="text-yellow-400 text-[10px]">%</span>
                     </div>
-                    {parseFloat(slippage) > 5 && (
+                    {slippageTooHigh ? (
+                      <p className="text-[9px] text-red-400 mt-1 uppercase">Slippage tolerance too high. Maximum is 50%.</p>
+                    ) : parseFloat(slippage) > 5 ? (
                       <p className="text-[9px] text-yellow-400 mt-1 uppercase">High slippage may result in unfavorable trades</p>
-                    )}
+                    ) : null}
                   </div>
 
                   <div>

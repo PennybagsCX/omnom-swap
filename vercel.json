@@ -1,10 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/api/gecko/:path*",
-      "destination": "https://api.geckoterminal.com/api/v2/:path*"
-    },
-    {
       "source": "/api/mexc/:path*",
       "destination": "https://api.mexc.com/:path*"
     }

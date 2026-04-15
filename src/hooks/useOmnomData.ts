@@ -2,7 +2,12 @@ import { useState, useCallback } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { CONTRACTS, OMNOM_WWDOGE_POOL } from '../lib/constants';
 
-const GECKO_BASE = '/api/gecko';
+// GeckoTerminal blocks HTTP origins (localhost) and Vercel datacenter IPs.
+// In production (HTTPS), call GeckoTerminal directly — CORS is allowed for HTTPS origins.
+// In development (HTTP localhost), route through the Vite dev server proxy.
+const GECKO_BASE = import.meta.env.PROD
+  ? 'https://api.geckoterminal.com/api/v2'
+  : '/api/gecko';
 const SLOW_STALE = 600_000; // 10 min for heavy endpoints
 const FAST_STALE = 300_000; // 5 min for primary pool
 const TRADES_PAGE_SIZE = 10;

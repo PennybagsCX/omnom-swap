@@ -53,3 +53,12 @@ metadata.json
 
 # Local token image originals (copies are in public/tokens/)
 TOKEN IMAGES/
+.vercel
+
+# Screenshots & temporary images (root level)
+/*.png
+/*.jpg
+/*.jpeg
+
+# Playwright MCP
+.playwright-mcp/

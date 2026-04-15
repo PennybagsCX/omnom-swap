@@ -45,3 +45,11 @@ apply_live_data.cjs
 
 # Empty metadata
 metadata.json
+
+# Agent/tooling config (Roo, Context)
+.roo/
+.context/
+.ckignore
+
+# Local token image originals (copies are in public/tokens/)
+TOKEN IMAGES/

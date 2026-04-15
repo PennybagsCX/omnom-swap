@@ -77,7 +77,7 @@ export function SwapScreen() {
 
   // Persist swap history to localStorage
   useEffect(() => {
-    try { localStorage.setItem('omnom_swap_history', JSON.stringify(swapHistory.slice(0, 50))); } catch {}
+    try { localStorage.setItem('omnom_swap_history', JSON.stringify(swapHistory.slice(0, 50))); } catch { /* localStorage may be unavailable in private mode */ }
   }, [swapHistory]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
@@ -402,7 +402,6 @@ export function SwapScreen() {
         });
       }
 
-      console.log('[handleConfirmSwap] Swap TX:', swapHash);
       addToast({ type: 'warning', title: 'Submitted', message: 'Waiting for confirmation...' });
 
       if (publicClient) {

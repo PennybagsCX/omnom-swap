@@ -2,11 +2,39 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi';
 import { createPublicClient, http, erc20Abi, getAddress, parseAbi } from 'viem';
 import { dogechain } from 'wagmi/chains';
-import { CONTRACTS, PAIR_ABI, MAX_UINT256, NETWORK_INFO, V2_ROUTER_ABI } from '../lib/constants';
+import { CONTRACTS, PAIR_ABI, MAX_UINT256, NETWORK_INFO, V2_ROUTER_ABI, isDogeshrkRouter } from '../lib/constants';
 import { useToast } from '../components/ToastContext';
 
 // Standalone public client — works without wallet connection
 const publicReader = createPublicClient({ chain: dogechain, transport: http() });
+
+// Minimal ABI for reading token decimals
+const erc20DecimalsAbi = ['function decimals() external view returns (uint8)'] as const;
+
+/** Read the decimals of an ERC-20 token from the chain (defaults to 18). */
+export function useTokenDecimals(tokenAddress: string | undefined): number {
+  const [decimals, setDecimals] = useState(18);
+  useEffect(() => {
+    if (!tokenAddress) return;
+    let cancelled = false;
+    const fetchDecimals = async () => {
+      try {
+        const addr = getAddress(tokenAddress);
+        const d = await publicReader.readContract({
+          address: addr,
+          abi: erc20DecimalsAbi,
+          functionName: 'decimals',
+        });
+        if (!cancelled) setDecimals(Number(d));
+      } catch {
+        // Default to 18 if read fails
+      }
+    };
+    fetchDecimals();
+    return () => { cancelled = true; };
+  }, [tokenAddress]);
+  return decimals;
+}
 
 // Parsed ABI for direct viem contract reads
 const parsedPairAbi = parseAbi(PAIR_ABI);
@@ -79,18 +107,20 @@ export function usePoolReserves(pairAddress: string | undefined) {
   return data;
 }
 
-// Resolve the DogeSwap V2 pair address for given tokens (LP tokens live on the DogeSwap pair, not GeckoTerminal's pair)
-export function useDogeswapPair(token0: string | undefined, token1: string | undefined) {
+// Resolve the V2 pair address for given tokens via the correct factory (LP tokens live on the pair, not GeckoTerminal's pair)
+// Defaults to DogeSwap factory if none specified
+export function useFactoryPair(token0: string | undefined, token1: string | undefined, factoryAddress?: string) {
   const [pair, setPair] = useState<string | undefined>(undefined);
+
+  const factory = factoryAddress ?? CONTRACTS.DOGEWAP_FACTORY;
 
   useEffect(() => {
     if (!token0 || !token1) return;
     let cancelled = false;
     const fetchPair = async () => {
       try {
-        const factory = getAddress('0xd27d9d61590874bf9ee2a19b27e265399929c9c3');
         const addr = await publicReader.readContract({
-          address: factory,
+          address: getAddress(factory),
           abi: parseAbi(['function getPair(address,address) external view returns (address)']),
           functionName: 'getPair',
           args: [getAddress(token0), getAddress(token1)],
@@ -102,24 +132,47 @@ export function useDogeswapPair(token0: string | undefined, token1: string | und
     };
     fetchPair();
     return () => { cancelled = true; };
-  }, [token0, token1]);
+  }, [token0, token1, factory]);
 
   return pair;
+}
+
+// Backward-compatible alias — resolves via DogeSwap factory
+export function useDogeswapPair(token0: string | undefined, token1: string | undefined) {
+  return useFactoryPair(token0, token1, CONTRACTS.DOGEWAP_FACTORY);
+}
+
+// Convenience hook — resolves via DogeShrk factory
+export function useDogeshrkPair(token0: string | undefined, token1: string | undefined) {
+  return useFactoryPair(token0, token1, CONTRACTS.DOGESHRK_FACTORY);
 }
 
 // Read user's LP token balance for a pool — uses standalone reader (works without wallet)
 export function useLpBalance(pairAddress: string | undefined) {
   const { address, isConnected } = useAccount();
   const [lpBalance, setLpBalance] = useState<bigint>(0n);
+  const [isLoading, setIsLoading] = useState(false);
   const [refetchCounter, setRefetchCounter] = useState(0);
 
   useEffect(() => {
-    if (!pairAddress || !isConnected || !address) return;
+    console.log('[useLpBalance] useEffect fired', { pairAddress: pairAddress || '(empty)', isConnected, address: address || '(none)' });
+    if (!pairAddress || !address) {
+      console.warn('[useLpBalance] Skipping — missing:', {
+        pairAddress: !pairAddress ? 'MISSING' : 'ok',
+        address: !address ? 'MISSING' : 'ok',
+      });
+      setLpBalance(0n);
+      return;
+    }
     let cancelled = false;
     let addr: `0x${string}`;
-    try { addr = getAddress(pairAddress); } catch { return; }
+    try { addr = getAddress(pairAddress); } catch (e) {
+      console.error('[useLpBalance] Invalid pairAddress:', pairAddress, e);
+      return;
+    }
 
     const fetchBalance = async () => {
+      setIsLoading(true);
       try {
         const bal = await publicReader.readContract({
           address: addr,
@@ -127,8 +180,15 @@ export function useLpBalance(pairAddress: string | undefined) {
           functionName: 'balanceOf',
           args: [address],
         });
-        if (!cancelled) setLpBalance(bal as bigint);
-      } catch { /* ignore */ }
+        if (!cancelled) {
+          setLpBalance(bal as bigint);
+          console.log('[useLpBalance] balanceOf result:', (bal as bigint).toString(), 'wei for pair:', addr, 'wallet:', address);
+        }
+      } catch (e) {
+        console.error('[useLpBalance] balanceOf failed for pair:', addr, 'wallet:', address, e);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     };
 
     fetchBalance();
@@ -138,6 +198,7 @@ export function useLpBalance(pairAddress: string | undefined) {
 
   return {
     lpBalance,
+    isLoading,
     refetch: () => setRefetchCounter(c => c + 1),
   };
 }
@@ -196,15 +257,16 @@ export function useErc20Balances(tokenA: string | undefined, tokenB: string | un
   return balances;
 }
 
-// Read LP token allowance to V2 router
-export function useLpAllowance(pairAddress: string | undefined) {
+// Read LP token allowance to a router (defaults to DogeSwap V2 router)
+export function useLpAllowance(pairAddress: string | undefined, routerAddress?: `0x${string}`) {
   const { address, isConnected } = useAccount();
+  const router = (routerAddress ?? CONTRACTS.DOGESWAP_V2_ROUTER) as `0x${string}`;
 
   const { data, refetch } = useReadContract({
     address: pairAddress as `0x${string}`,
     abi: PAIR_ABI,
     functionName: 'allowance',
-    args: address ? [address, CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`] : undefined,
+    args: address ? [address, router] : undefined,
     query: { enabled: !!pairAddress && isConnected },
   });
 
@@ -214,10 +276,10 @@ export function useLpAllowance(pairAddress: string | undefined) {
   };
 }
 
-// Read ERC-20 token allowances to the V2 router
-export function useTokenAllowances(tokenA: string | undefined, tokenB: string | undefined) {
+// Read ERC-20 token allowances to a router (defaults to DogeSwap V2 router)
+export function useTokenAllowances(tokenA: string | undefined, tokenB: string | undefined, routerAddress?: `0x${string}`) {
   const { address, isConnected } = useAccount();
-  const router = CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`;
+  const router = (routerAddress ?? CONTRACTS.DOGESWAP_V2_ROUTER) as `0x${string}`;
 
   const { data: aA, refetch: rA } = useReadContract({
     address: tokenA ? getAddress(tokenA) : undefined,
@@ -242,7 +304,7 @@ export function useTokenAllowances(tokenA: string | undefined, tokenB: string | 
   };
 }
 
-// Add liquidity via V2 router (atomic — avoids MEV issues of multi-tx direct pair interaction)
+// Add liquidity via V2 router (supports both DogeSwap and DogeShrk routers)
 export function useAddLiquidity() {
   const { writeContractAsync } = useWriteContract();
   const { addToast } = useToast();
@@ -258,8 +320,10 @@ export function useAddLiquidity() {
     slippageBps: number;
     deadlineMinutes: number;
     recipient: `0x${string}`;
+    routerAddress?: `0x${string}`;
   }) => {
-    const routerAddress = CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`;
+    const routerAddress = (params.routerAddress ?? CONTRACTS.DOGESWAP_V2_ROUTER) as `0x${string}`;
+    const useETH = isDogeshrkRouter(routerAddress);
     const txDeadline = Math.floor(Date.now() / 1000) + params.deadlineMinutes * 60;
 
     const t0IsWWDOGE = params.token0.toLowerCase() === CONTRACTS.WWDOGE.toLowerCase();
@@ -313,10 +377,12 @@ export function useAddLiquidity() {
         const amountTokenMin = t0IsWWDOGE ? params.amountBMin : params.amountAMin;
         const amountWDOGEMin = t0IsWWDOGE ? params.amountAMin : params.amountBMin;
         const value = t0IsWWDOGE ? params.amountADesired : params.amountBDesired;
+        // DogeShrk uses standard addLiquidityETH; DogeSwap uses addLiquidityWDOGE
+        const fnName = useETH ? 'addLiquidityETH' : 'addLiquidityWDOGE';
         txHash = await writeContractAsync({
           address: routerAddress,
           abi: parsedRouterAbi,
-          functionName: 'addLiquidityWDOGE',
+          functionName: fnName,
           args: [token, amountTokenDesired, amountTokenMin, amountWDOGEMin, params.recipient, BigInt(txDeadline)],
           value,
         });
@@ -362,7 +428,7 @@ export function useAddLiquidity() {
   return { addLiquidity };
 }
 
-// Remove liquidity via V2 router (atomic — avoids MEV issues of multi-tx direct pair interaction)
+// Remove liquidity via V2 router (supports both DogeSwap and DogeShrk routers)
 export function useRemoveLiquidity() {
   const { writeContractAsync } = useWriteContract();
   const { addToast } = useToast();
@@ -377,8 +443,10 @@ export function useRemoveLiquidity() {
     amountBMin: bigint;
     deadlineMinutes: number;
     recipient: `0x${string}`;
+    routerAddress?: `0x${string}`;
   }) => {
-    const routerAddress = CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`;
+    const routerAddress = (params.routerAddress ?? CONTRACTS.DOGESWAP_V2_ROUTER) as `0x${string}`;
+    const useETH = isDogeshrkRouter(routerAddress);
     const txDeadline = Math.floor(Date.now() / 1000) + params.deadlineMinutes * 60;
 
     const aIsWWDOGE = params.tokenA.toLowerCase() === CONTRACTS.WWDOGE.toLowerCase();
@@ -418,10 +486,12 @@ export function useRemoveLiquidity() {
         const token = aIsWWDOGE ? params.tokenB : params.tokenA;
         const amountTokenMin = aIsWWDOGE ? params.amountBMin : params.amountAMin;
         const amountWDOGEMin = aIsWWDOGE ? params.amountAMin : params.amountBMin;
+        // DogeShrk uses standard removeLiquidityETH; DogeSwap uses removeLiquidityWDOGE
+        const fnName = useETH ? 'removeLiquidityETH' : 'removeLiquidityWDOGE';
         txHash = await writeContractAsync({
           address: routerAddress,
           abi: parsedRouterAbi,
-          functionName: 'removeLiquidityWDOGE',
+          functionName: fnName,
           args: [token, params.liquidity, amountTokenMin, amountWDOGEMin, params.recipient, BigInt(txDeadline)],
         });
       } else {
@@ -497,18 +567,19 @@ export function useApproveToken() {
   return { approve };
 }
 
-// Approve LP token for the V2 router (needed before removeLiquidity)
+// Approve LP token for a router (defaults to DogeSwap V2 router)
 export function useApproveLp() {
   const { writeContractAsync } = useWriteContract();
   const { addToast } = useToast();
 
-  const approveLp = useCallback(async (pairAddress: `0x${string}`, amount?: bigint) => {
+  const approveLp = useCallback(async (pairAddress: `0x${string}`, routerAddress?: `0x${string}`, amount?: bigint) => {
+    const router = (routerAddress ?? CONTRACTS.DOGESWAP_V2_ROUTER) as `0x${string}`;
     try {
       const hash = await writeContractAsync({
         address: pairAddress,
         abi: PAIR_ABI,
         functionName: 'approve',
-        args: [CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`, amount ?? MAX_UINT256],
+        args: [router, amount ?? MAX_UINT256],
       });
       addToast({ type: 'success', title: 'Approved', message: 'LP token approved for withdrawal' });
       return hash;

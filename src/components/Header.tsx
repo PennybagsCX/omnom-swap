@@ -67,7 +67,7 @@ export function Header({ activeTab, setActiveTab }: { activeTab: string, setActi
           </div>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex gap-8 font-headline font-bold tracking-tighter uppercase ml-8">
+          <nav className="hidden md:flex gap-8 font-headline font-bold tracking-tighter uppercase absolute left-1/2 -translate-x-1/2">
             {(['SWAP', 'POOLS', 'STATS'] as const).map((tab) => (
               <button
                 key={tab}
@@ -113,7 +113,7 @@ export function Header({ activeTab, setActiveTab }: { activeTab: string, setActi
             >
               {isWrongNetwork
                 ? 'SWITCH TO DOGECHAIN'
-                : isConnected ? getTruncatedAddress(address!) : 'JOIN THE PACK'}
+                : isConnected ? getTruncatedAddress(address!) : 'CONNECT WALLET'}
             </button>
           </div>
 

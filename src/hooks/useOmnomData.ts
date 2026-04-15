@@ -79,18 +79,38 @@ export function useOmnomData() {
   const p = poolQuery.data;
 
   // All pools list — aggregates TVL/volume/txns across ALL DEXes
+  // Fetches ALL pages from GeckoTerminal (pagination-aware) so no pools are missed
+  const POOLS_REFETCH_INTERVAL = 60_000; // 60s — conservative to avoid 429 rate limits
   const poolsListQuery = useQuery({
     queryKey: ['omnomPoolsList'],
     queryFn: async (): Promise<PoolListItem[]> => {
-      const res = await fetch(`${GECKO_BASE}/networks/dogechain/tokens/${CONTRACTS.OMNOM_TOKEN}/pools?page=1&limit=30`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      return json.data || [];
+      const allPools: PoolListItem[] = [];
+      let page = 1;
+      const limit = 30;
+      let lastPage = 1;
+
+      // Fetch pages sequentially until we've fetched the last page
+      do {
+        const res = await fetch(`${GECKO_BASE}/networks/dogechain/tokens/${CONTRACTS.OMNOM_TOKEN}/pools?page=${page}&limit=${limit}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (Array.isArray(json.data)) {
+          allPools.push(...json.data);
+        }
+        // GeckoTerminal pagination: meta.page.last indicates the last page number
+        const metaLast = json.meta?.page?.last;
+        if (typeof metaLast === 'number' && metaLast > lastPage) {
+          lastPage = metaLast;
+        }
+        page++;
+      } while (page <= lastPage);
+
+      return allPools;
     },
     ...baseOpts,
     enabled: !!p, // only fetch after primary pool loads
     staleTime: SLOW_STALE,
-    refetchInterval: false, // no auto-refetch
+    refetchInterval: POOLS_REFETCH_INTERVAL,
   });
 
   // All pools — needed early for multi-pool trades and aggregation
@@ -227,10 +247,6 @@ export function useOmnomData() {
     buys: sum.buys + (pl.attributes.transactions?.h24?.buys || 0),
     sells: sum.sells + (pl.attributes.transactions?.h24?.sells || 0),
   }), { buys: 0, sells: 0 });
-  const totalTxns6: { buys: number; sells: number } | null = poolsListHasError ? null : allPools.reduce((sum, pl) => ({
-    buys: sum.buys + (pl.attributes.transactions?.h6?.buys || 0),
-    sells: sum.sells + (pl.attributes.transactions?.h6?.sells || 0),
-  }), { buys: 0, sells: 0 });
 
   // ── Price from primary pool ──
   const priceUsd: number | null = poolHasError ? null : (p ? Number(p.base_token_price_usd) || 0 : 0);
@@ -274,7 +290,7 @@ export function useOmnomData() {
     // Aggregated across ALL pools
     totalTvl,
     totalVol24, totalVol6, totalVol1,
-    totalTxns24, totalTxns6,
+    totalTxns24,
 
     // Trades pagination
     hasMoreTrades,

@@ -6,6 +6,7 @@ import { StatsScreen } from './components/StatsScreen';
 import { ToastProvider } from './components/ToastContext';
 import { Construction, Lock } from 'lucide-react';
 
+// TODO: Move ADMIN_PIN to environment variable or server-side validation for production
 const ADMIN_PIN = '696985';
 
 export default function App() {
@@ -32,7 +33,7 @@ export default function App() {
             <div className="flex gap-8 mt-4 md:mt-0 font-body text-[10px] uppercase tracking-[0.2em] font-medium">
               <a href="https://x.com/omnomtoken" target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">X (Twitter)</a>
               <a href="https://t.me/omnomtoken_dc" target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">Telegram</a>
-              <a href="#" className="text-on-surface-variant hover:text-primary transition-colors">Docs</a>
+              <a href="https://github.com/PennybagsCX/omnom-swap" target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">Docs</a>
             </div>
           </div>
           <div className="h-1 bg-primary w-full opacity-10"></div>

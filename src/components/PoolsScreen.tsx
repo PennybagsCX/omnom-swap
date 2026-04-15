@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { ExternalLink, Droplets, PawPrint, AlertTriangle, Plus, Minus } from 'lucide-react';
-import { CONTRACTS, NETWORK_INFO, calcPriceImpact, impactColor } from '../lib/constants';
+import { NETWORK_INFO, CONTRACT_REFERENCE, calcPriceImpact, impactColor } from '../lib/constants';
 import { useOmnomData } from '../hooks/useOmnomData';
+import { useNewPairMonitor } from '../hooks/useNewPairMonitor';
 import { LiquidityModal } from './LiquidityModal';
 
 interface PoolData {
@@ -43,6 +44,9 @@ function pctChange(val: string | undefined): { text: string; color: string } {
 }
 
 export function PoolsScreen() {
+  // Monitor on-chain PairCreated events for instant new-pool detection
+  useNewPairMonitor();
+
   const {
     totalTvl, totalVol24, totalTxns24, poolCount,
     allPools,
@@ -332,15 +336,27 @@ export function PoolsScreen() {
         </>
       )}
 
-      {/* Pool addresses for reference */}
+      {/* Contract Reference — driven by CONTRACT_REFERENCE in constants.ts */}
       <div className="mt-6 bg-surface-container-low border border-outline-variant/10 p-4">
         <h3 className="font-headline font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-3">Contract Reference</h3>
-        <div className="space-y-2 text-xs font-mono">
-          <div className="flex gap-4"><span className="text-on-surface-variant w-32 shrink-0">OMNOM:</span><a href={`${NETWORK_INFO.blockExplorer}/token/${CONTRACTS.OMNOM_TOKEN}/token-transfers`} target="_blank" rel="noopener noreferrer" className="text-white hover:text-primary break-all">{CONTRACTS.OMNOM_TOKEN}</a></div>
-          <div className="flex gap-4"><span className="text-on-surface-variant w-32 shrink-0">V3 Router:</span><span className="text-white break-all">{CONTRACTS.ALGEBRA_V3_ROUTER}</span></div>
-          <div className="flex gap-4"><span className="text-on-surface-variant w-32 shrink-0">V2 Router:</span><span className="text-white break-all">{CONTRACTS.DOGESWAP_V2_ROUTER}</span></div>
-          <div className="flex gap-4"><span className="text-on-surface-variant w-32 shrink-0">V3 Quoter:</span><span className="text-white break-all">{CONTRACTS.ALGEBRA_QUOTER}</span></div>
-          <div className="flex gap-4"><span className="text-on-surface-variant w-32 shrink-0">WWDOGE:</span><span className="text-white break-all">{CONTRACTS.WWDOGE}</span></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs font-mono">
+          {CONTRACT_REFERENCE.map((entry) => {
+            const href = entry.link === 'token'
+              ? `${NETWORK_INFO.blockExplorer}/token/${entry.address}/token-transfers`
+              : entry.link === 'address'
+                ? `${NETWORK_INFO.blockExplorer}/address/${entry.address}`
+                : undefined;
+            return (
+              <div key={entry.label} className="flex gap-4">
+                <span className="text-on-surface-variant w-36 shrink-0">{entry.label}:</span>
+                {href ? (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-white hover:text-primary break-all">{entry.address}</a>
+                ) : (
+                  <span className="text-white break-all">{entry.address}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

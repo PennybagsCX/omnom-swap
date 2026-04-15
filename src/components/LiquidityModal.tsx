@@ -2,16 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useChainId } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { X, Droplets, Loader2, AlertTriangle } from 'lucide-react';
-import { TOKENS, NETWORK_INFO, CONTRACTS } from '../lib/constants';
+import { TOKENS, NETWORK_INFO, CONTRACTS, getRouterForDex, getFactoryForDex, isKnownDex, KNOWN_DEX_NAMES } from '../lib/constants';
 import {
   usePoolReserves,
   useLpBalance,
   useDogeswapPair,
+  useFactoryPair,
   useErc20Balances,
   useAddLiquidity,
   useRemoveLiquidity,
   computeWithdrawAmounts,
+  useTokenDecimals,
 } from '../hooks/useLiquidity';
+
+// BigInt-based ratio for precise amount calculation (avoids floating-point precision loss)
+const RATIO_SCALE = 2n ** 96n;
 
 type ModalMode = 'add' | 'remove';
 
@@ -48,16 +53,30 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const isWrongNetwork = isConnected && chainId !== NETWORK_INFO.chainId;
   const isV3 = dexId === 'quickswap_dogechain';
 
-  // Pool data — read from GeckoTerminal's pair to get token addresses
-  const { token0, token1, symbol0, symbol1 } = usePoolReserves(
+  // Pool data — read reserves/token addresses from GeckoTerminal's pair (correct for display)
+  const { token0, token1, symbol0, symbol1, reserve0, reserve1, totalSupply, isLoading: isPoolLoading } = usePoolReserves(
     isV3 ? undefined : pairAddress,
   );
-  // Resolve the DogeSwap pair — LP tokens, reserves, and totalSupply live here
+
+  // Resolve the ACTUAL pair address via the correct factory based on dexId
+  // LP tokens live on the factory-created pair, NOT necessarily GeckoTerminal's attr.address
+  const factoryAddress = getFactoryForDex(dexId);
+  const factoryPair = useFactoryPair(token0 as string | undefined, token1 as string | undefined, factoryAddress);
+
+  // Keep DogeSwap pair resolution for router selection
   const dogeswapPair = useDogeswapPair(token0 as string | undefined, token1 as string | undefined);
-  const { reserve0, reserve1, totalSupply, isLoading: isPoolLoading } = usePoolReserves(
-    isV3 ? undefined : (dogeswapPair ?? pairAddress),
-  );
-  const { lpBalance, refetch: refetchLp } = useLpBalance(dogeswapPair ?? pairAddress);
+
+  // Query LP balance at the factory-resolved pair (where LP tokens actually live)
+  // Falls back to GeckoTerminal's address if factory resolution hasn't completed yet
+  const { lpBalance, isLoading: isLpLoading, refetch: refetchLp } = useLpBalance(factoryPair ?? pairAddress);
+
+  // Resolve the correct router — GeckoTerminal's dexId can be misleading
+  // If DogeSwap factory confirms this pair address, use DogeSwap router regardless of dexId
+  const dexRouter = getRouterForDex(dexId);
+  const isDogeswapFactoryPair = !!dogeswapPair && dogeswapPair.toLowerCase() === pairAddress.toLowerCase();
+  const routerAddress = isDogeswapFactoryPair
+    ? (CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`)
+    : dexRouter;
 
   // Token balances — also reads native DOGE if token is WWDOGE
   const { balanceA: rawBalA, balanceB: rawBalB, nativeBalance, isLoading: isLoadingBalances } = useErc20Balances(
@@ -68,8 +87,12 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const isToken0WWDOGE = token0?.toLowerCase() === CONTRACTS.WWDOGE.toLowerCase();
   const isToken1WWDOGE = token1?.toLowerCase() === CONTRACTS.WWDOGE.toLowerCase();
 
-  const rawBalANum = !isConnected ? 0 : rawBalA ? Number(formatUnits(rawBalA, 18)) : 0;
-  const rawBalBNum = !isConnected ? 0 : rawBalB ? Number(formatUnits(rawBalB, 18)) : 0;
+  // Dynamic decimals — reads from each token contract (defaults to 18)
+  const decimals0 = useTokenDecimals(token0 as string | undefined);
+  const decimals1 = useTokenDecimals(token1 as string | undefined);
+
+  const rawBalANum = !isConnected ? 0 : rawBalA ? Number(formatUnits(rawBalA, decimals0)) : 0;
+  const rawBalBNum = !isConnected ? 0 : rawBalB ? Number(formatUnits(rawBalB, decimals1)) : 0;
   const nativeDoge = !isConnected ? 0 : Number(formatUnits(nativeBalance, 18));
   // Swap page uses native DOGE balance for WWDOGE — match that behavior here
   const balanceA = isToken0WWDOGE ? nativeDoge : rawBalANum;
@@ -103,39 +126,49 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
     }
   }, [isOpen, mode]);
 
-  // Pool ratio for auto-fill (guarded against zero division)
-  const r0Num = reserve0 > 0n ? Number(formatUnits(reserve0, 18)) : 0;
-  const poolRatio = r0Num > 0 && reserve1 > 0n
-    ? Number(formatUnits(reserve1, 18)) / r0Num
+  // BigInt-based ratio for precise amount calculation (avoids floating-point precision loss)
+  // ratioX96 = reserve1 * 2^96 / reserve0 — gives fixed-point precision
+  const ratioX96 = reserve0 > 0n && reserve1 > 0n
+    ? (reserve1 * RATIO_SCALE) / reserve0
+    : 0n;
+  // For display only (pool ratio text):
+  const poolRatio = reserve0 > 0n
+    ? Number(formatUnits(reserve1, decimals1)) / Number(formatUnits(reserve0, decimals0))
     : 0;
 
   const handleAmountAChange = useCallback((val: string) => {
     if (val === '' || /^\d*\.?\d*$/.test(val)) {
       setAmountA(val);
-      if (poolRatio > 0 && val) {
-        const parsed = parseFloat(val);
-        if (!isNaN(parsed)) {
-          setAmountB((parsed * poolRatio).toFixed(6).replace(/\.?0+$/, ''));
+      if (ratioX96 > 0n && val) {
+        try {
+          const amountABigInt = parseUnits(val, decimals0);
+          const amountBWei = (amountABigInt * ratioX96) / RATIO_SCALE;
+          setAmountB(formatUnits(amountBWei, decimals1).replace(/\.?0+$/, ''));
+        } catch {
+          setAmountB('');
         }
-      } else {
+      } else if (val === '') {
         setAmountB('');
       }
     }
-  }, [poolRatio]);
+  }, [ratioX96, decimals0, decimals1]);
 
   const handleAmountBChange = useCallback((val: string) => {
     if (val === '' || /^\d*\.?\d*$/.test(val)) {
       setAmountB(val);
-      if (poolRatio > 0 && val) {
-        const parsed = parseFloat(val);
-        if (!isNaN(parsed) && poolRatio > 0) {
-          setAmountA((parsed / poolRatio).toFixed(6).replace(/\.?0+$/, ''));
+      if (ratioX96 > 0n && val) {
+        try {
+          const amountBBigInt = parseUnits(val, decimals1);
+          const amountAWei = (amountBBigInt * RATIO_SCALE) / ratioX96;
+          setAmountA(formatUnits(amountAWei, decimals0).replace(/\.?0+$/, ''));
+        } catch {
+          setAmountA('');
         }
-      } else {
+      } else if (val === '') {
         setAmountA('');
       }
     }
-  }, [poolRatio]);
+  }, [ratioX96, decimals0, decimals1]);
 
   const parsedSlippage = parseFloat(slippage) || 1;
   const slippageError = parsedSlippage <= 0 ? 'Slippage must be > 0%' : '';
@@ -161,8 +194,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
     if (!address || !token0 || !token1 || parsedA <= 0 || parsedB <= 0) return;
     setIsPending(true);
     try {
-      const amountADesired = parseUnits(parsedA.toString(), 18);
-      const amountBDesired = parseUnits(parsedB.toString(), 18);
+      const amountADesired = parseUnits(amountA || '0', decimals0);
+      const amountBDesired = parseUnits(amountB || '0', decimals1);
       const slippageBpsInt = BigInt(Math.floor(parsedSlippage * 100));
       const basisPoints = 10000n;
       await addLiquidity({
@@ -175,6 +208,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
         slippageBps: Math.floor(parsedSlippage * 100),
         deadlineMinutes: Math.max(1, Math.min(60, parseInt(deadline) || 20)),
         recipient: address,
+        routerAddress,
       });
       setAmountA('');
       setAmountB('');
@@ -187,7 +221,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
     }
   };
 
-  // Remove LP handler — direct pair interaction (no router needed)
+  // Remove LP handler — routes through the correct DEX router
   const handleRemoveLiquidity = async () => {
     if (!address || !token0 || !token1 || withdrawAmounts.liquidityToWithdraw <= 0n) return;
     setIsPending(true);
@@ -195,7 +229,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
       const slippageBpsInt = BigInt(Math.floor(parsedSlippage * 100));
       const basisPoints = 10000n;
       await removeLiquidity({
-        lpTokenAddress: pairAddress as `0x${string}`,
+        lpTokenAddress: (factoryPair ?? pairAddress) as `0x${string}`,
         tokenA: token0,
         tokenB: token1,
         liquidity: withdrawAmounts.liquidityToWithdraw,
@@ -203,6 +237,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
         amountBMin: (withdrawAmounts.amount1 * (basisPoints - slippageBpsInt)) / basisPoints,
         deadlineMinutes: Math.max(1, Math.min(60, parseInt(deadline) || 20)),
         recipient: address,
+        routerAddress,
       });
       refetchLp();
       onClose();
@@ -231,6 +266,33 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
             <p className="font-headline font-bold text-white uppercase mb-2">V3 LP Coming Soon</p>
             <p className="text-sm text-on-surface-variant">
               This pool uses concentrated liquidity (Algebra V3). LP management for V3 pools will be available in a future update.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Unknown DEX — can't safely route LP transactions without correct factory/router
+  const isUnknownDex = !isKnownDex(dexId);
+  if (isUnknownDex) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="font-headline font-black text-xl uppercase tracking-tighter text-white">{poolName}</h2>
+            <button onClick={onClose} className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="flex flex-col items-center py-8 text-center">
+            <AlertTriangle className="w-10 h-10 text-yellow-400 mb-4" />
+            <p className="font-headline font-bold text-white uppercase mb-2">DEX Not Supported</p>
+            <p className="text-sm text-on-surface-variant mb-3">
+              This DEX is not yet supported for liquidity operations.
+            </p>
+            <p className="text-xs text-on-surface-variant">
+              Supported DEXes: {KNOWN_DEX_NAMES.join(', ')}.
             </p>
           </div>
         </div>
@@ -273,7 +335,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
             <span className="font-headline font-bold text-white">{poolName}</span>
             {reserve0 > 0n && (
               <div className="text-xs text-on-surface-variant mt-2 font-mono">
-                {Number(formatUnits(reserve0, 18)).toLocaleString(undefined, { maximumFractionDigits: 2 })} {symA} / {Number(formatUnits(reserve1, 18)).toLocaleString(undefined, { maximumFractionDigits: 2 })} {symB}
+                {Number(formatUnits(reserve0, decimals0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} {symA} / {Number(formatUnits(reserve1, decimals1)).toLocaleString(undefined, { maximumFractionDigits: 2 })} {symB}
               </div>
             )}
             {poolRatio > 0 && (
@@ -452,7 +514,14 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
               <div className="bg-surface-container p-4 border-l-4 border-secondary">
                 <span className="text-[10px] font-headline uppercase tracking-widest text-on-surface-variant block mb-1">Your LP Tokens</span>
                 <span className="font-headline font-bold text-xl text-white">
-                  {fmtLp(lpBalance)}
+                  {isLpLoading ? (
+                    <span className="flex items-center gap-2 text-sm text-on-surface-variant">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </span>
+                  ) : (
+                    fmtLp(lpBalance)
+                  )}
                 </span>
               </div>
 
@@ -482,11 +551,11 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                 <div className="bg-surface-container p-4 border border-outline-variant/15 space-y-2">
                   <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
                     <span>You Receive</span>
-                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount0, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symA}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
-                    <span></span>
-                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount1, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symB}</span>
+                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount0, decimals0)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symA}</span>
+                   </div>
+                   <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
+                     <span></span>
+                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount1, decimals1)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symB}</span>
                   </div>
                 </div>
               )}
@@ -563,11 +632,11 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                 <>
                   <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
                     <span>You Receive</span>
-                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount0, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symA}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
-                    <span></span>
-                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount1, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symB}</span>
+                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount0, decimals0)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symA}</span>
+                   </div>
+                   <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
+                     <span></span>
+                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount1, decimals1)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symB}</span>
                   </div>
                 </>
               )}

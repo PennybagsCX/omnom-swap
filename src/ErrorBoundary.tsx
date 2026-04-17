@@ -3,6 +3,8 @@ import { TriangleAlert, RefreshCw } from 'lucide-react';
 
 interface Props {
   children?: ReactNode;
+  /** Optional lightweight fallback for inline error boundaries. */
+  fallback?: ReactNode;
 }
 
 interface State {
@@ -25,6 +27,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      // If a custom fallback was provided, use it (e.g. for inline component boundaries)
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      // Default: full-page crash screen
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#0a0a0c] font-body text-white relative overflow-hidden p-6">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-900/10 blur-[150px] rounded-none pointer-events-none"></div>

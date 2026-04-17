@@ -4,6 +4,7 @@ import { NETWORK_INFO, CONTRACT_REFERENCE, calcPriceImpact, impactColor } from '
 import { useOmnomData } from '../hooks/useOmnomData';
 import { useNewPairMonitor } from '../hooks/useNewPairMonitor';
 import { LiquidityModal } from './LiquidityModal';
+import { formatCompactPrice } from '../lib/format';
 
 interface PoolData {
   id: string;
@@ -23,15 +24,7 @@ interface PoolData {
   };
 }
 
-function fmtUsd(n: number | null): string {
-  if (n === null) return '\u2014';
-  if (n === 0) return '$0';
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  if (n >= 0.01) return `$${n.toFixed(4)}`;
-  return `$${n.toFixed(8)}`;
-}
+const fmtUsd = formatCompactPrice;
 
 const LOW_TVL_THRESHOLD = 500; // Pools below $500 TVL flagged as low-liquidity
 

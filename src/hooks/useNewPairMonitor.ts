@@ -21,10 +21,9 @@ const FACTORY_ABI = [
 
 // ── Factory addresses to monitor for new OMNOM pairs ──
 const FACTORIES = [
-  { name: 'DogeSwap', address: CONTRACTS.DOGEWAP_FACTORY as `0x${string}` },
+  { name: 'DogeSwap', address: CONTRACTS.DOGESWAP_FACTORY as `0x${string}` },
   { name: 'DogeShrk', address: CONTRACTS.DOGESHRK_FACTORY as `0x${string}` },
   { name: 'WOJAK', address: CONTRACTS.WOJAK_FACTORY as `0x${string}` },
-  { name: 'Bourbon', address: CONTRACTS.BOURBON_FACTORY as `0x${string}` },
   { name: 'KibbleSwap', address: CONTRACTS.KIBBLESWAP_FACTORY as `0x${string}` },
   { name: 'YodeSwap', address: CONTRACTS.YODESWAP_FACTORY as `0x${string}` },
 ] as const;
@@ -89,7 +88,7 @@ export function useNewPairMonitor() {
       }
     };
 
-  // Watch all four factories. Each call returns a cleanup function via useEffect.
+  // Watch all factories. Each call returns a cleanup function via useEffect.
   // We call the hook unconditionally (rules of hooks) — if the address is undefined
   // the hook simply won't subscribe.
   useWatchContractEvent({
@@ -129,14 +128,6 @@ export function useNewPairMonitor() {
     abi: FACTORY_ABI,
     eventName: 'PairCreated',
     onLogs: handleLogs(FACTORIES[4].name),
-    pollingInterval: 4_000,
-  });
-
-  useWatchContractEvent({
-    address: FACTORIES[5].address,
-    abi: FACTORY_ABI,
-    eventName: 'PairCreated',
-    onLogs: handleLogs(FACTORIES[5].name),
     pollingInterval: 4_000,
   });
 }

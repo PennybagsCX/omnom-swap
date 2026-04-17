@@ -14,6 +14,7 @@ import {
   computeWithdrawAmounts,
   useTokenDecimals,
 } from '../hooks/useLiquidity';
+import { formatCompactAmount } from '../lib/format';
 
 // BigInt-based ratio for precise amount calculation (avoids floating-point precision loss)
 const RATIO_SCALE = 2n ** 96n;
@@ -37,14 +38,11 @@ function tokenSymbol(address: string | undefined): string {
   return known ? known.symbol : `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
-// Format LP balance — shows enough precision for very small positions
+// Format LP balance — uses compact notation for small values
 function fmtLp(val: bigint): string {
   const n = Number(formatUnits(val, 18));
   if (n === 0) return '0';
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  if (n >= 0.0001) return n.toFixed(6);
-  // For tiny amounts, show scientific notation
-  return n.toExponential(4);
+  return formatCompactAmount(n);
 }
 
 export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, dexId, tvl }: LiquidityModalProps) {
@@ -305,7 +303,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}>
-      <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] flex flex-col max-h-[80vh] my-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] flex flex-col max-h-[80vh] my-auto" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-outline-variant/15 shrink-0">
           <div className="flex items-center gap-3">
@@ -315,7 +313,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
             </h2>
           </div>
           {!isPending && (
-            <button onClick={onClose} className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+            <button onClick={onClose} aria-label="Close liquidity modal" className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
               <X className="w-6 h-6" />
             </button>
           )}
@@ -335,12 +333,12 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
             <span className="font-headline font-bold text-white">{poolName}</span>
             {reserve0 > 0n && (
               <div className="text-xs text-on-surface-variant mt-2 font-mono">
-                {Number(formatUnits(reserve0, decimals0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} {symA} / {Number(formatUnits(reserve1, decimals1)).toLocaleString(undefined, { maximumFractionDigits: 2 })} {symB}
+                {formatCompactAmount(Number(formatUnits(reserve0, decimals0)))} {symA} / {formatCompactAmount(Number(formatUnits(reserve1, decimals1)))} {symB}
               </div>
             )}
             {poolRatio > 0 && (
               <div className="text-[10px] text-on-surface-variant mt-1">
-                1 {symA} = {poolRatio.toFixed(6)} {symB}
+                1 {symA} = {formatCompactAmount(poolRatio)} {symB}
               </div>
             )}
             {/* Low-liquidity warning */}
@@ -353,7 +351,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
             {totalSupply > 0n && totalSupply < parseUnits('100', 18) && (
               <div className="flex items-center gap-2 mt-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 p-2">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                <span className="uppercase tracking-widest">Low-liquidity pool — high slippage recommended (3%+).</span>
+                <span className="uppercase tracking-widest">Low-liquidity pool — consider using higher slippage (3%+) to avoid transaction failure.</span>
               </div>
             )}
           </div>
@@ -368,7 +366,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                   <div className="flex items-center gap-2">
                     {isConnected && (
                       <>
-                        <span>Balance: {balanceA.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</span>
+                        <span className="truncate">Balance: {formatCompactAmount(balanceA)}</span>
                         <button
                           onClick={() => {
                             const max = balanceA * 0.99;
@@ -386,6 +384,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                   type="text"
                   value={amountA}
                   onChange={(e) => handleAmountAChange(e.target.value)}
+                  aria-label={`Amount of ${symA} to add`}
                   className="w-full bg-transparent border-none p-0 text-2xl font-headline font-bold text-white focus:ring-0 outline-none"
                   placeholder="0.00"
                   disabled={isPending}
@@ -399,7 +398,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                   <div className="flex items-center gap-2">
                     {isConnected && (
                       <>
-                        <span>Balance: {balanceB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</span>
+                        <span className="truncate">Balance: {formatCompactAmount(balanceB)}</span>
                         <button
                           onClick={() => {
                             const max = balanceB * 0.99;
@@ -417,6 +416,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                   type="text"
                   value={amountB}
                   onChange={(e) => handleAmountBChange(e.target.value)}
+                  aria-label={`Amount of ${symB} to add`}
                   className="w-full bg-transparent border-none p-0 text-2xl font-headline font-bold text-white focus:ring-0 outline-none"
                   placeholder="0.00"
                   disabled={isPending}
@@ -553,11 +553,11 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                 <div className="bg-surface-container p-4 border border-outline-variant/15 space-y-2">
                   <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
                     <span>You Receive</span>
-                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount0, decimals0)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symA}</span>
+                    <span className="text-white truncate">{formatCompactAmount(Number(formatUnits(withdrawAmounts.amount0, decimals0)))} {symA}</span>
                    </div>
                    <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
                      <span></span>
-                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount1, decimals1)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symB}</span>
+                    <span className="text-white truncate">{formatCompactAmount(Number(formatUnits(withdrawAmounts.amount1, decimals1)))} {symB}</span>
                   </div>
                 </div>
               )}
@@ -636,11 +636,11 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
                 <>
                   <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
                     <span>You Receive</span>
-                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount0, decimals0)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symA}</span>
+                    <span className="text-white truncate">{formatCompactAmount(Number(formatUnits(withdrawAmounts.amount0, decimals0)))} {symA}</span>
                    </div>
                    <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant">
                      <span></span>
-                    <span className="text-white">{Number(formatUnits(withdrawAmounts.amount1, decimals1)).toLocaleString(undefined, { maximumFractionDigits: 4 })} {symB}</span>
+                    <span className="text-white truncate">{formatCompactAmount(Number(formatUnits(withdrawAmounts.amount1, decimals1)))} {symB}</span>
                   </div>
                 </>
               )}

@@ -29,6 +29,8 @@ coverage/
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
 
 # Agent/tooling config (not part of the project)
 .agent/
@@ -59,6 +61,11 @@ TOKEN IMAGES/
 /*.png
 /*.jpg
 /*.jpeg
+
+# Foundry artifacts (deployment artifacts, compilation cache, build output)
+broadcast/
+cache/
+out/
 
 # Playwright MCP
 .playwright-mcp/

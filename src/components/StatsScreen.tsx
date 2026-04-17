@@ -2,31 +2,17 @@ import { useState } from 'react';
 import { BarChart3, TrendingUp, Activity, Clock, Hash, ArrowUpRight, ArrowDownRight, ExternalLink, ChevronDown, CircleDot } from 'lucide-react';
 import { useOmnomData, Trade } from '../hooks/useOmnomData';
 import { CONTRACTS, NETWORK_INFO, BUBBLEMAP_URL, impactColor, calcPriceImpact } from '../lib/constants';
+import { formatCompactPrice, formatCompactAmount } from '../lib/format';
 
 const OMNOM = CONTRACTS.OMNOM_TOKEN.toLowerCase();
 const WWDOGE = CONTRACTS.WWDOGE.toLowerCase();
 
-function fmtUsd(n: number | null): string {
-  if (n === null) return '\u2014';
-  if (n === 0) return '$0';
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  if (n >= 0.01) return `$${n.toFixed(4)}`;
-  const str = n.toFixed(10);
-  const match = str.match(/0\.(0+)([1-9])/);
-  if (match) return `$${n.toFixed(match[1].length + 2)}`;
-  return `$${n.toFixed(6)}`;
-}
+const fmtUsd = formatCompactPrice;
 
 function fmtTokenAmt(n: number | null): string {
   if (n === null) return '\u2014';
   if (n === 0) return '0';
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
-  if (n >= 1) return n.toFixed(2);
-  return n.toFixed(6);
+  return formatCompactAmount(n);
 }
 
 function tokenLabel(address: string): string {

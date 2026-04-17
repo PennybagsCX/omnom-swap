@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
-import { SwapScreen } from './components/SwapScreen';
+import { Footer } from './components/Footer';
+import { UnifiedSwapScreen } from './components/UnifiedSwapScreen';
 import { PoolsScreen } from './components/PoolsScreen';
 import { StatsScreen } from './components/StatsScreen';
+import { TestingDashboard } from './components/aggregator/TestingDashboard';
+import { Disclosures } from './components/aggregator/Disclosures';
+import { TelegramBanner } from './components/TelegramBanner';
 import { ToastProvider } from './components/ToastContext';
 import { Construction, Lock } from 'lucide-react';
 
@@ -16,35 +20,81 @@ async function verifyPin(input: string): Promise<boolean> {
   return hashHex === ADMIN_PIN_HASH;
 }
 
+export type TabType = 'SWAP' | 'POOLS' | 'STATS' | 'DASHBOARD' | 'DISCLOSURES';
+
+const VALID_TABS: TabType[] = ['SWAP', 'POOLS', 'STATS', 'DISCLOSURES'];
+
+/** Map tab to a URL hash fragment */
+function tabToHash(tab: TabType): string {
+  return tab === 'SWAP' ? '' : `#${tab.toLowerCase()}`;
+}
+
+/** Map a URL hash fragment back to a TabType, defaulting to SWAP */
+function hashToTab(hash: string): TabType {
+  const clean = hash.replace('#', '').toUpperCase();
+  if (VALID_TABS.includes(clean as TabType)) return clean as TabType;
+  return 'SWAP';
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'SWAP' | 'POOLS' | 'STATS'>('SWAP');
+  const [activeTab, setActiveTab] = useState<TabType>(() => hashToTab(window.location.hash));
+
+  /** Navigate to a tab — pushes browser history so back button works */
+  const navigateToTab = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+    const newHash = tabToHash(tab);
+    if (window.location.hash !== newHash) {
+      window.history.pushState({ tab }, '', newHash || window.location.pathname);
+    }
+  }, []);
+
+  /** Listen for browser back/forward buttons */
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const tab = (e.state?.tab as TabType) || hashToTab(window.location.hash);
+      if (VALID_TABS.includes(tab)) {
+        setActiveTab(tab);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Set initial history state so back button works from the first navigation
+  useEffect(() => {
+    window.history.replaceState({ tab: activeTab }, '', tabToHash(activeTab) || window.location.pathname);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [dashboardUnlocked, setDashboardUnlocked] = useState(false);
 
   return (
     <ToastProvider>
       <div className="min-h-screen flex flex-col font-body text-on-surface selection:bg-primary selection:text-on-primary">
         <div className="grain-overlay"></div>
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-primary focus:text-on-primary focus:rounded">
+          Skip to content
+        </a>
 
-        <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Header activeTab={activeTab} setActiveTab={navigateToTab} />
+        <TelegramBanner />
 
-        <main className="flex-grow pt-24 pb-12 px-6 max-w-[1920px] mx-auto w-full relative z-10">
-          {activeTab === 'SWAP' && <SwapScreen />}
+        <main id="main-content" className="flex-grow pt-20 md:pt-24 pb-8 md:pb-12 px-4 md:px-6 max-w-[1920px] mx-auto w-full relative z-10">
+          {activeTab === 'SWAP' && <UnifiedSwapScreen onTabChange={navigateToTab} />}
           {activeTab === 'POOLS' && <PoolsScreen />}
           {activeTab === 'STATS' && <StatsScreen />}
+          {activeTab === 'DASHBOARD' && (
+            dashboardUnlocked
+              ? <TestingDashboard />
+              : <LockedScreen
+                  title="Testing Dashboard"
+                  subtitle="Admin access required to view simulation tools and contract diagnostics."
+                  icon={<Lock className="w-12 h-12" />}
+                  onUnlock={() => setDashboardUnlocked(true)}
+                />
+          )}
+          {activeTab === 'DISCLOSURES' && <Disclosures />}
         </main>
 
-        <footer className="bg-surface-container-lowest border-t border-outline-variant/15 relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-center px-8 py-6 w-full max-w-[1920px] mx-auto">
-            <div className="font-body text-[10px] uppercase tracking-[0.2em] font-medium text-on-surface-variant">
-              $OMNOM: Unleash the Beast. Defend the Doge. <span className="text-primary">Devour the Rest.</span>
-            </div>
-            <div className="flex gap-8 mt-4 md:mt-0 font-body text-[10px] uppercase tracking-[0.2em] font-medium">
-              <a href="https://x.com/omnomtoken" target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">X (Twitter)</a>
-              <a href="https://t.me/omnomtoken_dc" target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">Telegram</a>
-              <a href="https://github.com/PennybagsCX/omnom-swap" target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary transition-colors">Docs</a>
-            </div>
-          </div>
-          <div className="h-1 bg-primary w-full opacity-10"></div>
-        </footer>
+        <Footer activeTab={activeTab} setActiveTab={navigateToTab} />
       </div>
     </ToastProvider>
   );
@@ -72,13 +122,13 @@ export function LockedScreen({ title, subtitle, icon, onUnlock }: { title: strin
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-      <div className="bg-surface-container-low p-12 border border-outline-variant/15 max-w-lg w-full flex flex-col items-center">
+      <div className="bg-surface-container-low p-8 md:p-12 border border-outline-variant/15 max-w-lg w-full flex flex-col items-center">
         <div className="text-primary opacity-40 mb-6">{icon}</div>
         <div className="flex items-center gap-2 mb-4">
           <Construction className="w-5 h-5 text-secondary" />
           <span className="font-headline text-xs uppercase tracking-[0.3em] text-secondary font-bold">Under Construction</span>
         </div>
-        <h2 className="font-headline font-black text-4xl md:text-5xl tracking-tighter uppercase text-white mb-4">{title}</h2>
+        <h2 className="font-headline font-black text-3xl md:text-4xl tracking-tighter uppercase text-white mb-4">{title}</h2>
         <p className="text-on-surface-variant font-body max-w-md">{subtitle}</p>
         <div className="mt-8 h-1 w-20 bg-primary opacity-30"></div>
 
@@ -101,7 +151,7 @@ export function LockedScreen({ title, subtitle, icon, onUnlock }: { title: strin
           <button
             type="submit"
             disabled={verifying}
-            className="px-8 py-2 font-headline font-black uppercase tracking-widest text-sm bg-primary text-black hover:bg-white hover:text-black transition-colors cursor-pointer disabled:opacity-50"
+            className="px-8 py-2 font-headline font-black uppercase tracking-widest text-sm bg-primary text-black hover:bg-white hover:text-black transition-colors cursor-pointer disabled:opacity-50 min-h-[44px]"
           >
             {verifying ? 'Verifying...' : 'Unlock'}
           </button>

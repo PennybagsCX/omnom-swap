@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Settings, ChevronDown, UtensilsCrossed, Zap, Search, Ghost, X, ExternalLink, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Settings, ChevronDown, UtensilsCrossed, Search, Ghost, X, ExternalLink, AlertTriangle, Sparkles, PenLine } from 'lucide-react';
 import { useAccount, useBalance, useReadContract, useWriteContract, useChainId, usePublicClient } from 'wagmi';
 import { erc20Abi, parseAbi, parseUnits, formatUnits } from 'viem';
-import { TOKENS, CONTRACTS, NETWORK_INFO, isNativeToken, OMNOM_WWDOGE_POOL, V2_ROUTER_ABI, MAX_UINT256, PRICE_IMPACT_WARN, PRICE_IMPACT_BLOCK, calcPriceImpact, impactColor } from '../lib/constants';
+import { TOKENS, CONTRACTS, NETWORK_INFO, isNativeToken, OMNOM_WWDOGE_POOL, V2_ROUTER_ABI, PRICE_IMPACT_WARN, PRICE_IMPACT_BLOCK, calcPriceImpact, impactColor } from '../lib/constants';
 import { useOmnomData } from '../hooks/useOmnomData';
 import { usePoolReserves, useTokenDecimals } from '../hooks/useLiquidity';
 import { useToast } from './ToastContext';
+import { formatCompactPrice, formatCompactAmount } from '../lib/format';
+import { useAutoSlippage } from '../hooks/useAutoSlippage';
 
 interface SwapTx {
   id: number;
@@ -38,50 +40,26 @@ function isValidSwapTx(obj: unknown): obj is SwapTx {
 
 // Price impact thresholds imported from constants.ts
 
-// Smart price formatting — drop insignificant trailing zeros, show enough precision for micro-prices
-function fmtPrice(n: number | null): string {
-  if (n === null) return '\u2014';
-  if (n === 0) return '$0';
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  if (n >= 0.01) return `$${n.toFixed(4)}`;
-  // For very small prices, find first significant digit and show 2 digits past it
-  const str = n.toFixed(10);
-  const match = str.match(/0\.(0+)([1-9])/);
-  if (match) {
-    const zeros = match[1].length;
-    const precision = zeros + 2;
-    return `$${n.toFixed(precision)}`;
-  }
-  return `$${n.toFixed(6)}`;
-}
+// Compact price formatting with subscript zero notation
+const fmtPrice = formatCompactPrice;
+const fmtUsd = formatCompactPrice;
 
-// Round to 2 decimal places for display amounts
+// Token amounts — compact notation for small values
 function fmtAmt(n: number): string {
-  if (n === 0) return '0';
-  if (n >= 1) return n.toFixed(2);
-  if (n >= 0.01) return n.toFixed(4);
-  return n.toFixed(6);
-}
-
-function fmtUsd(n: number | null): string {
-  if (n === null) return '\u2014';
-  if (n === 0) return '$0';
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  if (n >= 0.01) return `$${n.toFixed(4)}`;
-  return `$${n.toFixed(6)}`;
+  return formatCompactAmount(n);
 }
 
 export function SwapScreen() {
   const [sellAmount, setSellAmount] = useState<string>('');
-  const [sellToken, setSellToken] = useState(TOKENS[1]); // OMNOM
-  const [buyToken, setBuyToken] = useState(TOKENS[0]); // WWDOGE
+  const [buyAmountInput, setBuyAmountInput] = useState<string>('');
+  const [activeField, setActiveField] = useState<'sell' | 'buy'>('sell');
+  const [sellToken, setSellToken] = useState(TOKENS[0]); // WWDOGE — default sell
+  const [buyToken, setBuyToken] = useState(TOKENS[1]); // OMNOM — default buy
   const [exchangeRate, setExchangeRate] = useState(0);
   const [tokenModalSide, setTokenModalSide] = useState<'sell' | 'buy' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  const [slippage, setSlippage] = useState<string>('1.0');
+  const [slippage, setSlippage] = useState<string>('0.5');
   const [deadline, setDeadline] = useState<string>('5');
   const [showHistory, setShowHistory] = useState(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -153,7 +131,7 @@ export function SwapScreen() {
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const parsedSell = parseFloat(sellAmount) || 0;
+  const parsedBuyInput = parseFloat(buyAmountInput) || 0;
 
   // Pool reserves for quoting and price impact
   const { reserve0: poolRes0, reserve1: poolRes1, token0: poolT0, token1: poolT1 } = usePoolReserves(OMNOM_WWDOGE_POOL);
@@ -166,8 +144,39 @@ export function SwapScreen() {
   const mexcPriceStr = fmtPrice(mexcPrice);
   const mexcVolStr = fmtUsd(mexcVol24);
 
-  // Price quoting via V2 router (best available on Dogechain)
-  const parsedSellWei = parsedSell > 0 ? parseUnits(parsedSell.toString(), sellDecimals) : 0n;
+  // ─── Reverse calculation: BUY → SELL (when activeField === 'buy') ─────────
+  const computedSellAmount = useMemo(() => {
+    if (activeField !== 'buy' || parsedBuyInput <= 0 || !poolT0 || !poolT1) return '';
+    const buyAddr = (isNativeToken(buyToken) ? CONTRACTS.WWDOGE : buyToken.address).toLowerCase();
+    const sellAddr = (isNativeToken(sellToken) ? CONTRACTS.WWDOGE : sellToken.address).toLowerCase();
+    const sellIsT0 = sellAddr === poolT0.toLowerCase();
+    const sellIsT1 = sellAddr === poolT1.toLowerCase();
+    const buyIsT0 = buyAddr === poolT0.toLowerCase();
+    const buyIsT1 = buyAddr === poolT1.toLowerCase();
+    if (!((sellIsT0 && buyIsT1) || (sellIsT1 && buyIsT0))) return '';
+    const reserveSell = sellIsT0 ? poolRes0 : poolRes1;
+    const reserveBuy = sellIsT0 ? poolRes1 : poolRes0;
+    if (reserveSell <= 0n || reserveBuy <= 0n) return '';
+    const parsedBuyWei = parseUnits(parsedBuyInput.toString(), buyDecimals);
+    if (parsedBuyWei >= reserveBuy) return '';
+    // Reverse formula: amountIn = ceil(reserveIn * amountOut * 1000 / ((reserveOut - amountOut) * 997))
+    const numerator = reserveSell * parsedBuyWei * 1000n;
+    const denominator = (reserveBuy - parsedBuyWei) * 997n;
+    const sellWei = (numerator + denominator - 1n) / denominator;
+    return formatUnits(sellWei, sellDecimals);
+  }, [activeField, parsedBuyInput, buyToken, sellToken, poolRes0, poolRes1, poolT0, poolT1, buyDecimals, sellDecimals]);
+
+  // Sync sell field when buy is active and reverse calculation produces a result
+  useEffect(() => {
+    if (activeField === 'buy' && computedSellAmount !== '') {
+      setSellAmount(computedSellAmount);
+    }
+  }, [activeField, computedSellAmount]);
+
+  // Price quoting via V2 router (primary source on Dogechain)
+  const effectiveSellAmount = activeField === 'sell' ? sellAmount : (computedSellAmount || sellAmount);
+  const effectiveParsedSell = parseFloat(effectiveSellAmount) || 0;
+  const parsedSellWei = effectiveParsedSell > 0 ? parseUnits(effectiveParsedSell.toString(), sellDecimals) : 0n;
 
   const getRouterPath = useCallback((from: typeof TOKENS[0], to: typeof TOKENS[0]) => {
     const fromAddr = isNativeToken(from) || from.symbol === 'DC'
@@ -209,9 +218,9 @@ export function SwapScreen() {
   });
 
   // Direct V2 pool reserve quote (constant product formula with 0.3% fee)
-  // Most reliable for the main OMNOM/WWDOGE pool — avoids V3 tiny-pool misquotes
+  // Primary source for the main OMNOM/WWDOGE pool — avoids V3 tiny-pool misquotes
   const poolBasedRate = (() => {
-    if (parsedSell <= 0 || parsedSellWei <= 0n || !poolT0 || !poolT1) return 0;
+    if (effectiveParsedSell <= 0 || parsedSellWei <= 0n || !poolT0 || !poolT1) return 0;
     const sellAddr = (isNativeToken(sellToken) ? CONTRACTS.WWDOGE : sellToken.address).toLowerCase();
     const buyAddr = (isNativeToken(buyToken) ? CONTRACTS.WWDOGE : buyToken.address).toLowerCase();
     const sellIsT0 = sellAddr === poolT0.toLowerCase();
@@ -224,7 +233,7 @@ export function SwapScreen() {
     if (reserveSell <= 0n || reserveBuy <= 0n) return 0;
     // V2 AMM with 0.3% fee: amountOut = reserveBuy * amountIn * 997 / (reserveSell * 1000 + amountIn * 997)
     const buyWei = (reserveBuy * parsedSellWei * 997n) / (reserveSell * 1000n + parsedSellWei * 997n);
-    return Number(formatUnits(buyWei, buyDecimals)) / parsedSell;
+    return Number(formatUnits(buyWei, buyDecimals)) / effectiveParsedSell;
   })();
 
   useEffect(() => {
@@ -234,42 +243,111 @@ export function SwapScreen() {
       setExchangeRate(poolBasedRate);
     } else if (v3Quote !== undefined && v3Quote !== null && parsedSellWei > 0n) {
       const outAmount = formatUnits(v3Quote as bigint, buyDecimals);
-      const rate = Number(outAmount) / parsedSell;
+      const rate = Number(outAmount) / effectiveParsedSell;
       setExchangeRate(rate);
     } else if (v2AmountsOut && (v2AmountsOut as bigint[]).length === 2 && parsedSellWei > 0n) {
       const outAmount = formatUnits((v2AmountsOut as bigint[])[1], buyDecimals);
-      const rate = Number(outAmount) / parsedSell;
+      const rate = Number(outAmount) / effectiveParsedSell;
       setExchangeRate(rate);
     } else if (sellToken.address === buyToken.address || sellToken.symbol === buyToken.symbol) {
       setExchangeRate(1);
-    } else if (parsedSell === 0) {
+    } else if (effectiveParsedSell === 0) {
       setExchangeRate(0);
     }
-  }, [poolBasedRate, v3Quote, v2AmountsOut, parsedSellWei, parsedSell, sellToken, buyToken]);
+  }, [poolBasedRate, v3Quote, v2AmountsOut, parsedSellWei, effectiveParsedSell, sellToken, buyToken, buyDecimals]);
 
-  // Calculations
-  const parsedSlippage = parseFloat(slippage) || 0;
-  const slippageTooHigh = parsedSlippage > 50; // Fix 2: upper-bound validation
-  const buyAmount = exchangeRate > 0 ? fmtAmt(parsedSell * exchangeRate) : '0';
-  const minReceived = exchangeRate > 0 ? fmtAmt(parsedSell * exchangeRate * (1 - parsedSlippage / 100)) : '0';
-
-  // Price impact (estimated from pool reserves)
+  // Price impact (estimated from pool reserves) — works in both directions
   const priceImpact = (() => {
-    if (parsedSell <= 0 || !poolT0) return 0;
+    if (effectiveParsedSell <= 0 || !poolT0) return 0;
     const sellAddr = (isNativeToken(sellToken) ? CONTRACTS.WWDOGE : sellToken.address).toLowerCase();
     const reserveSell = sellAddr === poolT0.toLowerCase()
       ? Number(formatUnits(poolRes0, sellDecimals))
-      : Number(formatUnits(poolRes1, buyDecimals));
-    return calcPriceImpact(parsedSell, reserveSell);
+      : Number(formatUnits(poolRes1, sellDecimals));
+    return calcPriceImpact(effectiveParsedSell, reserveSell);
   })();
+
+  // ─── Auto Slippage ─────────────────────────────────────────────────────────
+  // Direct swap: hopCount is 1 (or 2 if routing through WDOGE)
+  const directHopCount = (() => {
+    if (sellToken.address === buyToken.address) return 1;
+    const sellIsNative = isNativeToken(sellToken);
+    const buyIsNative = isNativeToken(buyToken);
+    // If neither is native, may route through WDOGE (2 hops)
+    if (!sellIsNative && !buyIsNative) return 2;
+    return 1;
+  })();
+
+  // tradeSizeVsLiquidity = inputAmount / reserveIn
+  const directTradeSizeVsLiquidity = (() => {
+    if (effectiveParsedSell <= 0 || !poolT0) return 0;
+    const sellAddr = (isNativeToken(sellToken) ? CONTRACTS.WWDOGE : sellToken.address).toLowerCase();
+    const reserveSell = sellAddr === poolT0.toLowerCase()
+      ? Number(formatUnits(poolRes0, sellDecimals))
+      : Number(formatUnits(poolRes1, sellDecimals));
+    if (reserveSell <= 0) return 0;
+    return Math.min(effectiveParsedSell / reserveSell, 1);
+  })();
+
+  // isThinPair: true if reserveIn < 1000 WDOGE equivalent
+  const directIsThinPair = (() => {
+    if (!poolT0) return false;
+    const sellAddr = (isNativeToken(sellToken) ? CONTRACTS.WWDOGE : sellToken.address).toLowerCase();
+    const reserveSell = sellAddr === poolT0.toLowerCase() ? poolRes0 : poolRes1;
+    const reserveSellNum = Number(formatUnits(reserveSell, sellDecimals));
+    return reserveSellNum > 0 && reserveSellNum < 1000;
+  })();
+
+  const {
+    autoSlippage,
+    breakdown: autoBreakdown,
+    isAuto: isAutoSlippage,
+    setAuto: setAutoSlippage,
+    effectiveSlippage,
+    effectiveBps,
+    warningLevel: slippageWarningLevel,
+  } = useAutoSlippage(
+    priceImpact,
+    directHopCount,
+    directTradeSizeVsLiquidity,
+    directIsThinPair,
+    slippage,
+  );
+
+  // Calculations — use effective slippage
+  const effectiveSlippageNum = parseFloat(effectiveSlippage) || 0;
+  const slippageTooHigh = effectiveSlippageNum > 50; // Fix 2: upper-bound validation
+
+  // Buy amount display: when sell is active, compute from forward calc; when buy is active, show user input
+  const buyAmountDisplay = activeField === 'sell'
+    ? (exchangeRate > 0 ? fmtAmt(effectiveParsedSell * exchangeRate) : '0')
+    : buyAmountInput;
+  const minReceived = exchangeRate > 0 ? fmtAmt(effectiveParsedSell * exchangeRate * (1 - effectiveSlippageNum / 100)) : '0';
+
+  // Reverse calculation error (when buy field is active)
+  const reverseError = useMemo(() => {
+    if (activeField !== 'buy' || parsedBuyInput <= 0) return null;
+    if (!poolT0 || !poolT1) return 'Loading pool...';
+    const buyAddr = (isNativeToken(buyToken) ? CONTRACTS.WWDOGE : buyToken.address).toLowerCase();
+    const sellAddr = (isNativeToken(sellToken) ? CONTRACTS.WWDOGE : sellToken.address).toLowerCase();
+    const sellIsT0 = sellAddr === poolT0.toLowerCase();
+    const buyIsT1 = buyAddr === poolT1.toLowerCase();
+    const sellIsT1 = sellAddr === poolT1.toLowerCase();
+    const buyIsT0 = buyAddr === poolT0.toLowerCase();
+    if (!((sellIsT0 && buyIsT1) || (sellIsT1 && buyIsT0))) return null; // Not this pool pair — may use V3/V2 fallback
+    const reserveBuy = sellIsT0 ? poolRes1 : poolRes0;
+    const parsedBuyWei = parseUnits(parsedBuyInput.toString(), buyDecimals);
+    if (parsedBuyWei >= reserveBuy) return 'Insufficient liquidity';
+    return null;
+  }, [activeField, parsedBuyInput, buyToken, sellToken, poolT0, poolT1, poolRes0, poolRes1, buyDecimals]);
 
   // Input validation
   const inputError = (() => {
     if (!isConnected) return null;
-    if (!sellAmount || parsedSell <= 0) return null;
-    if (isNaN(parsedSell) || !isFinite(parsedSell)) return 'Invalid amount';
-    if (parsedSell > 1e18) return 'Amount too large';
-    if (parsedSell > displaySellBalance) return 'Insufficient balance';
+    if (reverseError) return reverseError;
+    if (!effectiveSellAmount || effectiveParsedSell <= 0) return null;
+    if (isNaN(effectiveParsedSell) || !isFinite(effectiveParsedSell)) return 'Invalid amount';
+    if (effectiveParsedSell > 1e18) return 'Amount too large';
+    if (effectiveParsedSell > displaySellBalance) return 'Insufficient balance';
     return null;
   })();
 
@@ -283,7 +361,7 @@ export function SwapScreen() {
   } else if (!isConnected) {
     buttonText = "CONNECT WALLET";
     isDisabled = true;
-  } else if (!sellAmount || parsedSell <= 0) {
+  } else if (!effectiveSellAmount || effectiveParsedSell <= 0) {
     buttonText = "ENTER AMOUNT";
     isDisabled = true;
   } else if (inputError) {
@@ -306,6 +384,8 @@ export function SwapScreen() {
     setSellToken(buyToken);
     setBuyToken(temp);
     setSellAmount('');
+    setBuyAmountInput('');
+    setActiveField('sell');
     setExchangeRate(0);
     setSwapFlip(prev => !prev);
   };
@@ -327,12 +407,23 @@ export function SwapScreen() {
       // Prevent excessive decimal places
       if (val.includes('.') && val.split('.')[1]?.length > 18) return;
       setSellAmount(val);
+      setActiveField('sell');
+    }
+  };
+
+  // NEW handler for buy field input
+  const handleBuyAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+      if (val.includes('.') && val.split('.')[1]?.length > 18) return;
+      setBuyAmountInput(val);
+      setActiveField('buy');
     }
   };
 
   const publicClient = usePublicClient();
 
-  const parsedRouterAbi = parseAbi(V2_ROUTER_ABI);
+  const parsedRouterAbi = V2_ROUTER_ABI;
 
   // Swap via V2 router — atomic single transaction (correct WDOGE function names)
   const handleConfirmSwap = async () => {
@@ -342,7 +433,13 @@ export function SwapScreen() {
     const routerAddress = CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`;
     const isSellingNative = isNativeToken(sellToken);
     const isBuyingNative = isNativeToken(buyToken);
-    const txDeadline = Math.floor(Date.now() / 1000) + (parseInt(deadline) || 5) * 60;
+    // Dynamic deadline: user setting + per-hop buffer (no artificial minimum)
+    const _EXTRA_PER_HOP = 30;
+    const _userSec = (parseInt(deadline) || 5) * 60;
+    const _hopCount = (sellToken.address !== buyToken.address) ? 1 : 0;
+    const _extraHop = Math.max(0, _hopCount - 1) * _EXTRA_PER_HOP;
+    const _effectiveSec = _userSec + _extraHop;
+    const txDeadline = Math.floor(Date.now() / 1000) + _effectiveSec;
 
     try {
       // Compute expected output from pool reserves
@@ -371,7 +468,7 @@ export function SwapScreen() {
         return;
       }
 
-      const slippageBps = BigInt(Math.floor((parseFloat(slippage) || 1) * 100));
+      const slippageBps = effectiveBps;
       const amountOutMin = (buyWeiOut * (10000n - slippageBps)) / 10000n;
       const sellAddr = (isSellingNative ? CONTRACTS.WWDOGE : sellToken.address) as `0x${string}`;
       const buyAddr = (isBuyingNative ? CONTRACTS.WWDOGE : buyToken.address) as `0x${string}`;
@@ -387,11 +484,14 @@ export function SwapScreen() {
         });
         if ((allowance as bigint) < parsedSellWei) {
           addToast({ type: 'warning', title: 'Approving', message: 'Approving token spend...' });
+          // 2% approval buffer: accounts for fee rounding, re-wrapping, and price shifts
+          // (amount * 102 / 100) — MEV protection: bounded approval, not unlimited
+          const approvalAmount = (parsedSellWei * 102n) / 100n;
           const approveHash = await writeContract({
             address: sellToken.address as `0x${string}`,
             abi: erc20Abi,
             functionName: 'approve',
-            args: [routerAddress, MAX_UINT256],
+            args: [routerAddress, approvalAmount],
           });
           const r = await publicClient.waitForTransactionReceipt({ hash: approveHash });
           if (r.status !== 'success') {
@@ -440,20 +540,22 @@ export function SwapScreen() {
         if (receipt.status === 'success') {
           const buyAmountActual = Number(formatUnits(buyWeiOut, buyDecimals));
           setSwapHistory(prev => [{
-            id: Date.now(), sellAmount: parsedSell, sellSymbol: sellToken.symbol,
+            id: Date.now(), sellAmount: effectiveParsedSell, sellSymbol: sellToken.symbol,
             buyAmount: buyAmountActual, buySymbol: buyToken.symbol,
             hash: swapHash as string, time: 'Just now', status: 'success',
             priceImpact: priceImpact * 100,
           }, ...prev]);
           setSellAmount('');
+          setBuyAmountInput('');
+          setActiveField('sell');
           addToast({
             type: 'success', title: 'Swap Complete',
-            message: `${parsedSell} ${sellToken.symbol} → ${fmtAmt(buyAmountActual)} ${buyToken.symbol}`,
+            message: `${effectiveParsedSell} ${sellToken.symbol} → ${fmtAmt(buyAmountActual)} ${buyToken.symbol}`,
             link: `${NETWORK_INFO.blockExplorer}/tx/${swapHash}`,
           });
         } else {
           setSwapHistory(prev => [{
-            id: Date.now(), sellAmount: parsedSell, sellSymbol: sellToken.symbol,
+            id: Date.now(), sellAmount: effectiveParsedSell, sellSymbol: sellToken.symbol,
             buyAmount: 0, buySymbol: buyToken.symbol,
             hash: swapHash as string, time: 'Just now', status: 'failed',
             priceImpact: priceImpact * 100,
@@ -467,15 +569,17 @@ export function SwapScreen() {
         setShowConfirmModal(false);
         const buyAmountActual = Number(formatUnits(buyWeiOut, buyDecimals));
         setSwapHistory(prev => [{
-          id: Date.now(), sellAmount: parsedSell, sellSymbol: sellToken.symbol,
+          id: Date.now(), sellAmount: effectiveParsedSell, sellSymbol: sellToken.symbol,
           buyAmount: buyAmountActual, buySymbol: buyToken.symbol,
           hash: swapHash as string, time: 'Just now', status: 'success',
             priceImpact: priceImpact * 100,
         }, ...prev]);
         setSellAmount('');
+        setBuyAmountInput('');
+        setActiveField('sell');
         addToast({
           type: 'success', title: 'Transaction Sent',
-          message: `${parsedSell} ${sellToken.symbol} → ${fmtAmt(buyAmountActual)} ${buyToken.symbol}`,
+          message: `${effectiveParsedSell} ${sellToken.symbol} → ${fmtAmt(buyAmountActual)} ${buyToken.symbol}`,
           link: `${NETWORK_INFO.blockExplorer}/tx/${swapHash}`,
         });
       }
@@ -493,19 +597,11 @@ export function SwapScreen() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] relative">
+    <div className="flex flex-col items-center min-h-[80vh] relative">
       {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[500px] w-full h-[500px] bg-primary/10 blur-[120px] rounded-none pointer-events-none"></div>
 
       <div className="w-full max-w-[480px] relative z-10 px-4 md:px-0">
-        {/* Mode badge */}
-        <div className="flex justify-center mb-6">
-          <div className="border border-secondary/50 px-4 py-1 flex items-center gap-2 bg-secondary/10">
-            <Zap className="text-secondary w-4 h-4 animate-pulse" fill="currentColor" />
-            <span className="font-headline font-bold text-secondary text-xs uppercase tracking-widest animate-pulse">Savage Mode</span>
-          </div>
-        </div>
-
         {/* Swap card */}
         <div className="glass-panel p-1 shadow-[0_0_40px_rgba(255,215,0,0.08)] border border-primary/20">
           <div className="bg-surface p-6 flex flex-col gap-4">
@@ -513,6 +609,7 @@ export function SwapScreen() {
               <h2 className="font-headline font-bold text-xl uppercase tracking-tight text-white">Swap Assets</h2>
               <button
                 onClick={() => setShowSettings(!showSettings)}
+                aria-label="Swap settings"
                 className={`transition-colors cursor-pointer ${showSettings ? 'text-primary' : 'text-on-surface-variant hover:text-primary'}`}
               >
                 <Settings className={`w-5 h-5 transition-transform duration-300 ${showSettings ? 'rotate-90' : ''}`} />
@@ -520,54 +617,97 @@ export function SwapScreen() {
             </div>
 
             {/* Settings panel — smooth expand/collapse */}
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showSettings ? 'max-h-60 opacity-100 mb-4' : 'max-h-0 opacity-0'}`}>
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showSettings ? 'max-h-[500px] opacity-100 mb-4' : 'max-h-0 opacity-0'}`}>
               <div className="bg-surface-container-low border border-primary/30 p-4">
                 <h3 className="font-headline font-bold text-xs uppercase tracking-widest text-primary mb-4">Transaction Settings</h3>
 
                 <div className="space-y-4">
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-headline uppercase text-on-surface-variant">Slippage Tolerance</span>
+                    <span className="text-[10px] font-headline uppercase text-on-surface-variant block mb-2">Slippage Tolerance</span>
+                    {/* Auto / Manual toggle pills */}
+                    <div className="flex items-center gap-2 mb-2">
                       <button
-                        onClick={() => {
-                          const base = 0.5;
-                          const sizeFactor = parsedSell > 1000 ? 0.5 : 0.2;
-                          setSlippage((base + sizeFactor).toFixed(1));
-                        }}
-                        className="text-[9px] font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 hover:bg-primary hover:text-on-primary transition-colors cursor-pointer"
+                        onClick={() => setAutoSlippage(true)}
+                        className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-headline font-bold uppercase tracking-widest cursor-pointer transition-colors ${
+                          isAutoSlippage
+                            ? 'bg-primary text-black border border-primary'
+                            : 'bg-surface-container-highest text-on-surface-variant border border-outline-variant/30 hover:border-primary/30'
+                        }`}
                       >
+                        <Sparkles className="w-3 h-3" />
                         Auto
                       </button>
+                      <button
+                        onClick={() => setAutoSlippage(false)}
+                        className={`flex items-center gap-1 px-3 py-1.5 text-[10px] font-headline font-bold uppercase tracking-widest cursor-pointer transition-colors ${
+                          !isAutoSlippage
+                            ? 'bg-primary text-black border border-primary'
+                            : 'bg-surface-container-highest text-on-surface-variant border border-outline-variant/30 hover:border-primary/30'
+                        }`}
+                      >
+                        <PenLine className="w-3 h-3" />
+                        Manual
+                      </button>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {[0.1, 0.5, 1.0].map(val => (
-                        <button
-                          key={val}
-                          onClick={() => setSlippage(val.toFixed(1))}
-                          className={`flex-1 py-1.5 text-[10px] font-headline font-bold uppercase cursor-pointer transition-colors ${
-                            parseFloat(slippage) === val
-                              ? 'bg-primary/20 text-primary border border-primary/50'
-                              : 'bg-surface-container-highest text-on-surface-variant border border-outline-variant/30 hover:border-primary/30'
-                          }`}
-                        >
-                          {val}%
-                        </button>
-                      ))}
-                      <input
-                        type="number"
-                        value={slippage}
-                        onChange={(e) => setSlippage(e.target.value)}
-                        min="0.01"
-                        max="50"
-                        className="w-16 bg-surface-container-highest border border-outline-variant/30 text-yellow-400 text-right text-[11px] px-2 py-1.5 focus:border-yellow-400 outline-none"
-                      />
-                      <span className="text-yellow-400 text-[10px]">%</span>
-                    </div>
-                    {slippageTooHigh ? (
+
+                    {isAutoSlippage ? (
+                      <>
+                        {/* Auto mode: read-only display with breakdown */}
+                        <div className="flex items-center gap-1">
+                          <div className="flex-1 bg-surface-container-highest border border-outline-variant/30 text-yellow-400 text-right text-[11px] px-2 py-1.5 opacity-80">
+                            {autoSlippage}
+                          </div>
+                          <span className="text-yellow-400 text-[10px]">%</span>
+                        </div>
+                        <div className="mt-1.5 text-[9px] text-on-surface-variant/70 space-y-0.5 font-body">
+                          <div>Base: {autoBreakdown.base.toFixed(1)}% + Impact: {autoBreakdown.priceImpactBuffer.toFixed(2)}%</div>
+                          <div>+ Hops: {autoBreakdown.hopBuffer.toFixed(1)}% + Variance: {autoBreakdown.varianceBuffer.toFixed(2)}%{autoBreakdown.thinPairBuffer > 0 ? ` + Thin: ${autoBreakdown.thinPairBuffer.toFixed(1)}%` : ''}</div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* Manual mode: quick-select buttons + editable input */}
+                        <div className="flex items-center gap-1">
+                          {[0.1, 0.5, 1.0].map(val => (
+                            <button
+                              key={val}
+                              onClick={() => setSlippage(val.toFixed(1))}
+                              className={`flex-1 py-1.5 text-[10px] font-headline font-bold uppercase cursor-pointer transition-colors ${
+                                parseFloat(slippage) === val
+                                  ? 'bg-primary/20 text-primary border border-primary/50'
+                                  : 'bg-surface-container-highest text-on-surface-variant border border-outline-variant/30 hover:border-primary/30'
+                              }`}
+                            >
+                              {val}%
+                            </button>
+                          ))}
+                          <input
+                            type="number"
+                            value={slippage}
+                            onChange={(e) => setSlippage(e.target.value)}
+                            min="0.01"
+                            max="50"
+                            className="w-16 bg-surface-container-highest border border-outline-variant/30 text-yellow-400 text-right text-[11px] px-2 py-1.5 focus:border-yellow-400 outline-none"
+                          />
+                          <span className="text-yellow-400 text-[10px]">%</span>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Warning messages based on effective slippage */}
+                    {slippageWarningLevel === 'danger' && (
+                      <p className="text-[9px] text-red-400 mt-1 uppercase font-bold">⚠️ Auto slippage above 15% — extreme MEV risk. Consider reducing trade size.</p>
+                    )}
+                    {slippageWarningLevel === 'warning' && (
+                      <p className="text-[9px] text-orange-400 mt-1 uppercase">⚠️ Auto slippage above 5% — increased MEV risk</p>
+                    )}
+                    {!isAutoSlippage && slippageTooHigh && (
                       <p className="text-[9px] text-red-400 mt-1 uppercase">Slippage tolerance too high. Maximum is 50%.</p>
-                    ) : parseFloat(slippage) > 5 ? (
+                    )}
+                    {!isAutoSlippage && !slippageTooHigh && parseFloat(slippage) > 5 && (
                       <p className="text-[9px] text-yellow-400 mt-1 uppercase">High slippage may result in unfavorable trades</p>
-                    ) : null}
+                    )}
+                    <p className="text-[9px] text-on-surface-variant/60 mt-1">⚠️ Higher slippage increases MEV risk</p>
                   </div>
 
                   <div>
@@ -589,16 +729,18 @@ export function SwapScreen() {
             </div>
 
             {/* Sell input */}
-            <div className="bg-surface-container-low p-5 border-l-4 border-primary">
+            <div className={`bg-surface-container-low p-5 border-l-4 ${activeField === 'sell' ? 'border-primary' : 'border-outline-variant/30'}`}>
               <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant mb-2">
-                <span>You Sell</span>
+                <span>{activeField === 'sell' ? 'You Sell' : 'You Sell (Estimated)'}</span>
                 <div className="flex items-center gap-2">
-                  <span>Balance: {displaySellBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</span>
+                  <span className="truncate">Balance: {fmtAmt(displaySellBalance)}</span>
                   <button
                     onClick={() => {
                       const max = displaySellBalance * 0.99; // Reserve for gas
                       setSellAmount(max > 0 ? max.toString() : '0');
+                      setActiveField('sell');
                     }}
+                    aria-label="Use maximum balance"
                     className="text-primary hover:text-white transition-colors px-1.5 py-0.5 bg-primary/10 border border-primary/20 text-[10px] active:scale-95 cursor-pointer"
                   >
                     MAX
@@ -621,7 +763,9 @@ export function SwapScreen() {
                     type="text"
                     value={sellAmount}
                     onChange={handleSellAmountChange}
-                    className="bg-transparent border-none p-0 text-2xl sm:text-3xl font-headline font-bold text-white focus:ring-0 w-full sm:w-2/3 outline-none"
+                    onFocus={() => setActiveField('sell')}
+                    aria-label="Amount to sell"
+                    className={`bg-transparent border-none p-0 text-2xl sm:text-3xl font-headline font-bold text-white focus:ring-0 w-full sm:w-2/3 outline-none ${activeField === 'buy' ? 'opacity-80' : ''}`}
                     placeholder="0.00"
                   />
                   <button
@@ -642,17 +786,66 @@ export function SwapScreen() {
             <div className="flex justify-center -my-6 relative z-20">
               <button
                 onClick={handleSwapTokens}
+                aria-label="Swap token direction"
                 className={`bg-primary text-black p-2 hover:bg-white transition-transform duration-300 cursor-pointer ${swapFlip ? 'rotate-180' : 'rotate-0'}`}
               >
                 <UtensilsCrossed className="w-6 h-6" />
               </button>
             </div>
 
-            {/* Buy output */}
-            <div className="bg-surface-container-low p-5 border-l-4 border-outline-variant/30">
+            {/* Buy input — now editable for bidirectional swap */}
+            <div className={`bg-surface-container-low p-5 border-l-4 ${activeField === 'buy' ? 'border-primary' : 'border-outline-variant/30'}`}>
               <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant mb-2">
-                <span>You Buy (Estimated)</span>
-                <span>Balance: {displayBuyBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 5 })}</span>
+                <span>{activeField === 'buy' ? 'You Buy' : 'You Buy (Estimated)'}</span>
+                <div className="flex items-center gap-2">
+                  <span className="truncate">Balance: {fmtAmt(displayBuyBalance)}</span>
+                  {isConnected && (
+                    <button
+                      aria-label="Use maximum balance"
+                      onClick={() => {
+                        if (displaySellBalance <= 0) return;
+                        const maxSell = displaySellBalance * 0.99; // Reserve for gas
+                        if (maxSell <= 0) return;
+                        const sellWei = parseUnits(maxSell.toString(), sellDecimals);
+                        // Forward AMM calculation using pool reserves
+                        if (poolT0 && poolT1) {
+                          const sellAddr = (isNativeToken(sellToken) ? CONTRACTS.WWDOGE : sellToken.address).toLowerCase();
+                          const buyAddr = (isNativeToken(buyToken) ? CONTRACTS.WWDOGE : buyToken.address).toLowerCase();
+                          const sellIsT0 = sellAddr === poolT0.toLowerCase();
+                          const sellIsT1 = sellAddr === poolT1.toLowerCase();
+                          const buyIsT0 = buyAddr === poolT0.toLowerCase();
+                          const buyIsT1 = buyAddr === poolT1.toLowerCase();
+                          if ((sellIsT0 && buyIsT1) || (sellIsT1 && buyIsT0)) {
+                            const reserveSell = sellIsT0 ? poolRes0 : poolRes1;
+                            const reserveBuy = sellIsT0 ? poolRes1 : poolRes0;
+                            if (reserveSell > 0n && reserveBuy > 0n) {
+                              const buyWei = (reserveBuy * sellWei * 997n) / (reserveSell * 1000n + sellWei * 997n);
+                              if (buyWei > 0n) {
+                                const buyOut = Number(formatUnits(buyWei, buyDecimals));
+                                if (buyOut > 0) {
+                                  setBuyAmountInput(buyOut.toString());
+                                  setActiveField('buy');
+                                  return;
+                                }
+                              }
+                            }
+                          }
+                        }
+                        // Fallback: if pool reserves not available but we have an exchange rate
+                        if (exchangeRate > 0) {
+                          const buyOut = maxSell * exchangeRate;
+                          if (buyOut > 0) {
+                            setBuyAmountInput(buyOut.toString());
+                            setActiveField('buy');
+                          }
+                        }
+                      }}
+                      className="text-primary hover:text-white transition-colors px-1.5 py-0.5 bg-primary/10 border border-primary/20 text-[10px] active:scale-95 cursor-pointer"
+                    >
+                      MAX
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                 <button
@@ -668,9 +861,11 @@ export function SwapScreen() {
                 <div className="flex justify-between items-center w-full">
                   <input
                     type="text"
-                    value={parsedSell > 0 && exchangeRate > 0 ? buyAmount : ''}
-                    readOnly
-                    className="bg-transparent border-none p-0 text-2xl sm:text-3xl font-headline font-bold text-white focus:ring-0 w-full sm:w-2/3 outline-none opacity-80"
+                    value={activeField === 'sell' ? (effectiveParsedSell > 0 && exchangeRate > 0 ? buyAmountDisplay : '') : buyAmountInput}
+                    onChange={handleBuyAmountChange}
+                    onFocus={() => setActiveField('buy')}
+                    aria-label="Amount to receive"
+                    className={`bg-transparent border-none p-0 text-2xl sm:text-3xl font-headline font-bold text-white focus:ring-0 w-full sm:w-2/3 outline-none ${activeField === 'sell' ? 'opacity-80' : ''}`}
                     placeholder="0.00"
                   />
                   <button
@@ -691,17 +886,17 @@ export function SwapScreen() {
             <div className="space-y-2 mt-2">
               <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                 <span>Exchange Rate</span>
-                <span className="text-white">{exchangeRate > 0 ? `1 ${sellToken.symbol} = ${exchangeRate.toFixed(6)} ${buyToken.symbol}` : '—'}</span>
+                <span className="text-white truncate">{exchangeRate > 0 ? `1 ${sellToken.symbol} = ${fmtAmt(exchangeRate)} ${buyToken.symbol}` : '—'}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-headline text-on-surface-variant uppercase">
                 <span>Price Impact</span>
-                <span className={`font-bold ${parsedSell > 0 ? impactColor(priceImpact) : 'text-on-surface-variant'}`}>
-                  {parsedSell > 0
+                <span className={`font-bold ${effectiveParsedSell > 0 ? impactColor(priceImpact) : 'text-on-surface-variant'}`}>
+                  {effectiveParsedSell > 0
                     ? `~${(priceImpact * 100).toFixed(2)}%`
                     : '—'}
                 </span>
               </div>
-              {parsedSell > 0 && priceImpact >= PRICE_IMPACT_WARN && (
+              {effectiveParsedSell > 0 && priceImpact >= PRICE_IMPACT_WARN && (
                 <div className={`flex items-center gap-2 p-2 text-xs font-headline ${
                   priceImpact >= PRICE_IMPACT_BLOCK
                     ? 'bg-red-900/20 border border-red-500/30 text-red-400'
@@ -715,7 +910,7 @@ export function SwapScreen() {
               )}
               <div className="flex justify-between items-center text-xs font-headline text-on-surface-variant uppercase">
                 <span>Slippage Tolerance</span>
-                <span className="text-secondary">{slippage}%</span>
+                <span className="text-secondary">{effectiveSlippage}%{isAutoSlippage ? ' ✨' : ''}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-headline text-on-surface-variant uppercase">
                 <span>Transaction Deadline</span>
@@ -723,11 +918,11 @@ export function SwapScreen() {
               </div>
               <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                 <span>Min. Received</span>
-                <span className="text-white">{parsedSell > 0 && exchangeRate > 0 ? `${minReceived} ${buyToken.symbol}` : '—'}</span>
+                <span className="text-white">{effectiveParsedSell > 0 && exchangeRate > 0 ? `${minReceived} ${buyToken.symbol}` : '—'}</span>
               </div>
               <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                 <span>Network Fee</span>
-                <span className="text-white">~0.05 DOGE</span>
+                <span className="text-white">~0.05 DOGE <span className="text-on-surface-variant text-[9px]">(est.)</span></span>
               </div>
             </div>
 
@@ -768,20 +963,19 @@ export function SwapScreen() {
                   className="w-full bg-surface-container-highest border border-outline-variant/30 text-white pl-7 pr-3 py-2 focus:border-primary outline-none font-body text-xs"
                 />
               </div>
-              {swapHistory.filter(tx =>
-                tx.sellSymbol.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-                tx.buySymbol.toLowerCase().includes(historySearchQuery.toLowerCase())
-              ).length > 0 ? (
+              {(() => {
+                const filteredHistory = swapHistory.filter(tx =>
+                  tx.sellSymbol.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+                  tx.buySymbol.toLowerCase().includes(historySearchQuery.toLowerCase())
+                );
+                return filteredHistory.length > 0 ? (
                 <>
-                  {swapHistory.filter(tx =>
-                    tx.sellSymbol.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-                    tx.buySymbol.toLowerCase().includes(historySearchQuery.toLowerCase())
-                  ).map(tx => (
+                  {filteredHistory.map(tx => (
                     <div key={tx.id} className="border-b border-outline-variant/10 pb-2 last:border-0 last:pb-0">
                       <div className="flex items-center gap-1.5 text-xs flex-wrap">
-                        <span className="font-bold text-white">{tx.sellAmount} {tx.sellSymbol}</span>
+                        <span className="font-bold text-white">{fmtAmt(tx.sellAmount)} {tx.sellSymbol}</span>
                         <UtensilsCrossed className="w-2.5 h-2.5 text-on-surface-variant rotate-90 shrink-0" />
-                        <span className="font-bold text-primary">{tx.buyAmount} {tx.buySymbol}</span>
+                        <span className="font-bold text-primary">{fmtAmt(tx.buyAmount)} {tx.buySymbol}</span>
                         <span className={`text-[9px] font-headline font-bold shrink-0 ${(tx.priceImpact ?? 0) >= PRICE_IMPACT_WARN * 100 ? 'text-yellow-400' : 'text-green-400'}`}>{(tx.priceImpact ?? 0).toFixed(1)}%</span>
                       </div>
                       <div className="flex items-center justify-between mt-0.5">
@@ -804,13 +998,14 @@ export function SwapScreen() {
                     Clear History
                   </button>
                 </>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-on-surface-variant">
-                  <Ghost className="w-12 h-12 mb-3 opacity-20" />
-                  <div className="text-sm font-headline uppercase tracking-widest text-white mb-1">No Swaps Found</div>
-                  <div className="text-[10px] uppercase tracking-wider opacity-60">The void remains empty</div>
-                </div>
-              )}
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 text-on-surface-variant">
+                    <Ghost className="w-12 h-12 mb-3 opacity-20" />
+                    <div className="text-sm font-headline uppercase tracking-widest text-white mb-1">No Swaps Found</div>
+                    <div className="text-[10px] uppercase tracking-wider opacity-60">The void remains empty</div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -920,7 +1115,7 @@ export function SwapScreen() {
                 <div className="space-y-4 mb-8">
                   <div className="flex justify-between items-center bg-surface-container p-4">
                     <span className="text-xs font-headline uppercase text-on-surface-variant">You Sell</span>
-                    <span className="font-headline font-bold text-xl text-white">{sellAmount} {sellToken.symbol}</span>
+                    <span className="font-headline font-bold text-xl text-white">{effectiveSellAmount} {sellToken.symbol}</span>
                   </div>
                   <div className="flex justify-center -my-6 relative z-10">
                     <div className="bg-surface-container-highest p-2 rounded-full border border-outline-variant/15">
@@ -929,14 +1124,14 @@ export function SwapScreen() {
                   </div>
                   <div className="flex justify-between items-center bg-surface-container p-4">
                     <span className="text-xs font-headline uppercase text-on-surface-variant">You Buy (Est.)</span>
-                    <span className="font-headline font-bold text-xl text-primary">{buyAmount} {buyToken.symbol}</span>
+                    <span className="font-headline font-bold text-xl text-primary">{buyAmountDisplay} {buyToken.symbol}</span>
                   </div>
                 </div>
 
                 <div className="space-y-2 mb-8 p-4 border border-outline-variant/15 bg-surface-container-highest/50">
                   <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                     <span>Rate</span>
-                    <span className="text-white">1 {sellToken.symbol} = {exchangeRate.toFixed(6)} {buyToken.symbol}</span>
+                    <span className="text-white truncate">1 {sellToken.symbol} = {fmtAmt(exchangeRate)} {buyToken.symbol}</span>
                   </div>
                   <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                     <span>Price Impact</span>
@@ -944,7 +1139,7 @@ export function SwapScreen() {
                   </div>
                   <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                     <span>Slippage</span>
-                    <span className="text-secondary">{slippage}%</span>
+                    <span className="text-secondary">{effectiveSlippage}%{isAutoSlippage ? ' ✨' : ''}</span>
                   </div>
                   <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                     <span>Min. Received</span>
@@ -952,8 +1147,16 @@ export function SwapScreen() {
                   </div>
                   <div className="flex justify-between text-xs font-headline text-on-surface-variant uppercase">
                     <span>Network Fee</span>
-                    <span className="text-white">~0.05 DOGE</span>
+                    <span className="text-white">~0.05 DOGE <span className="text-on-surface-variant text-[9px]">(est.)</span></span>
                   </div>
+                </div>
+
+                {/* MEV risk warning */}
+                <div className="flex items-start gap-2 p-3 bg-surface-container border border-outline-variant/10 text-on-surface-variant text-[10px] font-body">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-yellow-400 mt-0.5" />
+                  <span>
+                    Your transaction will be visible in the public mempool. Slippage tolerance protects against price changes.
+                  </span>
                 </div>
 
                 <div className="flex gap-4">

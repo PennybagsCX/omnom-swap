@@ -36,9 +36,9 @@ export function useTokenDecimals(tokenAddress: string | undefined): number {
   return decimals;
 }
 
-// Parsed ABI for direct viem contract reads
-const parsedPairAbi = parseAbi(PAIR_ABI);
-const parsedRouterAbi = parseAbi(V2_ROUTER_ABI);
+// ABIs are now pre-parsed in constants.ts — use them directly
+const parsedPairAbi = PAIR_ABI;
+const parsedRouterAbi = V2_ROUTER_ABI;
 
 // Read pool reserves and token addresses — direct viem client reads (no wallet needed)
 export function usePoolReserves(pairAddress: string | undefined) {
@@ -112,7 +112,7 @@ export function usePoolReserves(pairAddress: string | undefined) {
 export function useFactoryPair(token0: string | undefined, token1: string | undefined, factoryAddress?: string) {
   const [pair, setPair] = useState<string | undefined>(undefined);
 
-  const factory = factoryAddress ?? CONTRACTS.DOGEWAP_FACTORY;
+  const factory = factoryAddress ?? CONTRACTS.DOGESWAP_FACTORY;
 
   useEffect(() => {
     if (!token0 || !token1) return;
@@ -139,7 +139,7 @@ export function useFactoryPair(token0: string | undefined, token1: string | unde
 
 // Backward-compatible alias — resolves via DogeSwap factory
 export function useDogeswapPair(token0: string | undefined, token1: string | undefined) {
-  return useFactoryPair(token0, token1, CONTRACTS.DOGEWAP_FACTORY);
+  return useFactoryPair(token0, token1, CONTRACTS.DOGESWAP_FACTORY);
 }
 
 // Convenience hook — resolves via DogeShrk factory

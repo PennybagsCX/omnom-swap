@@ -256,7 +256,7 @@ export function useOmnomData() {
   // ── Price from primary pool ──
   const priceUsd: number | null = poolHasError ? null : (p ? Number(p.base_token_price_usd) || 0 : 0);
   const fdvUsd: number | null = poolHasError ? null : (p ? Number(p.fdv_usd) || 0 : 0);
-  const marketCapUsd: number | null = poolHasError ? null : (p ? Number(p.market_cap_usd) || 0 : 0);
+  const marketCapUsd: number | null = poolHasError ? null : (p ? (Number(p.market_cap_usd) || Number(p.fdv_usd) || 0) : 0);
   const priceChange24 = poolHasError ? null : (p?.price_change_percentage?.h24 ? parseFloat(p.price_change_percentage.h24) : null);
 
   // ── MEXC CEX price/volume ──

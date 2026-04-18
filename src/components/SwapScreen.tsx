@@ -136,10 +136,10 @@ export function SwapScreen() {
   const { reserve0: poolRes0, reserve1: poolRes1, token0: poolT0, token1: poolT1 } = usePoolReserves(OMNOM_WWDOGE_POOL);
 
   // Live $OMNOM market data — shared across all components via centralized hook
-  const { priceUsd: omnomPriceUsd, totalVol24: omnomVol24, fdvUsd: omnomFdvUsd, mexcPrice, mexcVol24 } = useOmnomData();
+  const { priceUsd: omnomPriceUsd, totalVol24: omnomVol24, marketCapUsd: omnomMarketCapUsd, mexcPrice, mexcVol24 } = useOmnomData();
   const omnomPrice = fmtPrice(omnomPriceUsd);
   const omnomVol = fmtUsd(omnomVol24);
-  const omnomFdv = fmtUsd(omnomFdvUsd);
+  const omnomMarketCap = fmtUsd(omnomMarketCapUsd);
   const mexcPriceStr = fmtPrice(mexcPrice);
   const mexcVolStr = fmtUsd(mexcVol24);
 
@@ -962,7 +962,7 @@ export function SwapScreen() {
           </div>
           <div className="bg-surface-container-low p-4 border-b-2 border-secondary text-center flex flex-col items-center justify-center col-span-2 sm:col-span-1">
             <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">$OMNOM Market Cap</p>
-            <p className="font-headline font-bold text-white whitespace-nowrap">{omnomFdv}</p>
+            <p className="font-headline font-bold text-white whitespace-nowrap">{omnomMarketCap}</p>
             <p className="text-[10px] font-headline text-secondary">BEAST MODE</p>
           </div>
         </div>

@@ -586,10 +586,10 @@ export function AggregatorSwap() {
   }, [sellToken.address, buyToken.address, sellAmount, buyAmountInput]);
 
   // Live $OMNOM market data — same hooks as Direct Swap
-  const { priceUsd: omnomPriceUsd, totalVol24: omnomVol24, fdvUsd: omnomFdvUsd, mexcPrice, mexcVol24 } = useOmnomData();
+  const { priceUsd: omnomPriceUsd, totalVol24: omnomVol24, marketCapUsd: omnomMarketCapUsd, mexcPrice, mexcVol24 } = useOmnomData();
   const omnomPrice = formatCompactPrice(omnomPriceUsd);
   const omnomVol = formatCompactPrice(omnomVol24);
-  const omnomFdv = formatCompactPrice(omnomFdvUsd);
+  const omnomMarketCap = formatCompactPrice(omnomMarketCapUsd);
   const mexcPriceStr = formatCompactPrice(mexcPrice);
   const mexcVolStr = formatCompactPrice(mexcVol24);
 
@@ -1275,7 +1275,7 @@ export function AggregatorSwap() {
         </div>
         <div className="bg-surface-container-low p-4 border-b-2 border-secondary text-center flex flex-col items-center justify-center col-span-2 sm:col-span-1">
           <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">$OMNOM Market Cap</p>
-          <p className="font-headline font-bold text-white whitespace-nowrap">{omnomFdv}</p>
+          <p className="font-headline font-bold text-white whitespace-nowrap">{omnomMarketCap}</p>
           <p className="text-[10px] font-headline text-secondary">BEAST MODE</p>
         </div>
       </div>

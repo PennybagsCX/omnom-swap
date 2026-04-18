@@ -19,7 +19,6 @@ import {
   Building2,
   Info,
   ChevronDown,
-  ChevronUp,
   AlertCircle,
 } from 'lucide-react';
 
@@ -45,18 +44,20 @@ function DisclosureCard({ section }: { section: DisclosureSection }) {
             {section.title}
           </span>
         </div>
-        {open ? (
-          <ChevronUp className="w-5 h-5 text-on-surface-variant shrink-0" />
-        ) : (
-          <ChevronDown className="w-5 h-5 text-on-surface-variant shrink-0" />
-        )}
+        <ChevronDown
+          className={`w-5 h-5 text-on-surface-variant shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
-      {open && (
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          open ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
         <div className="px-4 md:px-5 pb-4 md:pb-5 text-on-surface-variant text-xs md:text-sm font-body leading-relaxed space-y-3 border-t border-outline-variant/10 pt-4">
           {section.content}
         </div>
-      )}
+      </div>
     </div>
   );
 }

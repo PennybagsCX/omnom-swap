@@ -7,7 +7,7 @@
  */
 
 import { Wallet, Percent, Building2, ExternalLink, Shield, Coins } from 'lucide-react';
-import { useReadContract } from 'wagmi';
+import { useReadContract, useBalance } from 'wagmi';
 import { erc20Abi, formatUnits } from 'viem';
 import { NETWORK_INFO, CONTRACTS } from '../../lib/constants';
 import { formatCompactAmount } from '../../lib/format';
@@ -18,6 +18,20 @@ const TREASURY_ADDRESS = '0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88' as const;
 export function TreasuryDashboard() {
   const { owner, treasury, feeBps, isLoading } = useAggregatorContract();
 
+  // Read native DOGE balance of the treasury wallet
+  const { data: nativeBalance } = useBalance({
+    address: TREASURY_ADDRESS,
+    chainId: NETWORK_INFO.chainId,
+  });
+
+  // Read WWDOGE (ERC20) balance of the treasury wallet
+  const { data: wwdogeRawBalance } = useReadContract({
+    address: CONTRACTS.WWDOGE as `0x${string}`,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [TREASURY_ADDRESS],
+  });
+
   // Read OMNOM token balance of the treasury wallet
   const { data: omnomRawBalance } = useReadContract({
     address: CONTRACTS.OMNOM_TOKEN as `0x${string}`,
@@ -25,6 +39,16 @@ export function TreasuryDashboard() {
     functionName: 'balanceOf',
     args: [TREASURY_ADDRESS],
   });
+
+  const dogeBalance =
+    nativeBalance !== undefined
+      ? formatCompactAmount(Number(formatUnits(nativeBalance.value, nativeBalance.decimals)))
+      : '\u2014';
+
+  const wwdogeBalance =
+    wwdogeRawBalance !== undefined
+      ? formatCompactAmount(Number(formatUnits(wwdogeRawBalance as bigint, 18)))
+      : '\u2014';
 
   const omnomBalance =
     omnomRawBalance !== undefined
@@ -52,7 +76,7 @@ export function TreasuryDashboard() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Treasury Wallet — prominent display */}
-          <div className="bg-surface-container p-4 border border-primary/20 flex flex-col items-center justify-center text-center">
+          <div className="bg-surface-container p-4 border border-primary/20 flex flex-col items-center justify-center text-center sm:col-span-2">
             <div className="flex items-center justify-center gap-2 mb-2">
               <Wallet className="w-4 h-4 text-primary" />
               <span className="font-headline text-xs uppercase tracking-wider text-primary">
@@ -79,12 +103,32 @@ export function TreasuryDashboard() {
                 Fee collection & contract administration
               </div>
             )}
-            {/* Accumulated OMNOM balance */}
-            <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-outline-variant/10">
-              <Coins className="w-3.5 h-3.5 text-primary" />
-              <span className="font-body text-xs text-on-surface-variant">
-                Accumulated: <span className="text-white font-semibold">{omnomBalance}</span> OMNOM
-              </span>
+            {/* Token balance tiles */}
+            <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-outline-variant/10 w-full">
+              {/* Native DOGE */}
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-1">
+                  <Coins className="w-3 h-3 text-primary" />
+                  <span className="font-headline text-[10px] uppercase tracking-wider text-on-surface-variant">DOGE</span>
+                </div>
+                <span className="text-white font-semibold font-body text-xs">{dogeBalance}</span>
+              </div>
+              {/* WWDOGE */}
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-1">
+                  <Coins className="w-3 h-3 text-primary" />
+                  <span className="font-headline text-[10px] uppercase tracking-wider text-on-surface-variant">WWDOGE</span>
+                </div>
+                <span className="text-white font-semibold font-body text-xs">{wwdogeBalance}</span>
+              </div>
+              {/* OMNOM */}
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-1">
+                  <Coins className="w-3 h-3 text-primary" />
+                  <span className="font-headline text-[10px] uppercase tracking-wider text-on-surface-variant">OMNOM</span>
+                </div>
+                <span className="text-white font-semibold font-body text-xs">{omnomBalance}</span>
+              </div>
             </div>
           </div>
 
@@ -104,7 +148,7 @@ export function TreasuryDashboard() {
 
           {/* Contract Owner — secondary info, only shown if different from treasury */}
           {!sameAddress && owner && (
-            <div className="bg-surface-container p-3 border border-outline-variant/10 sm:col-span-2 flex flex-col items-center justify-center text-center">
+            <div className="bg-surface-container p-3 border border-outline-variant/10 flex flex-col items-center justify-center text-center">
               <div className="flex items-center justify-center gap-2 mb-1">
                 <Shield className="w-3 h-3 text-on-surface-variant" />
                 <span className="font-headline text-[10px] uppercase tracking-wider text-on-surface-variant">Contract Owner</span>

@@ -1255,56 +1255,11 @@ export function AggregatorSwap() {
         side={tokenModalSide ?? 'sell'}
       />
 
-      {/* Recent Swaps (on-chain) */}
-      <SwapHistory />
-
-      {/* Local Swap History — persisted in localStorage */}
-      {swapHistory.length > 0 && (
-        <div className="bg-surface/80 backdrop-blur-sm rounded-xl border border-outline/20 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-on-surface-variant">
-              Recent Swaps
-              <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-bold leading-none rounded-full bg-primary/20 text-primary">
-                {swapHistory.length}
-              </span>
-            </h3>
-            <button
-              onClick={() => setSwapHistory([])}
-              className="text-xs text-on-surface-variant/60 hover:text-error transition-colors"
-              aria-label="Clear swap history"
-            >
-              Clear
-            </button>
-          </div>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {swapHistory.slice(0, 20).map(tx => (
-              <div key={tx.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-surface-container/50">
-                <div className="flex items-center gap-2">
-                  <span className={tx.status === 'success' ? 'text-green-400' : 'text-red-400'}>
-                    {tx.status === 'success' ? '✓' : '✗'}
-                  </span>
-                  <span className="text-on-surface">
-                    {tx.sellAmount.toFixed(4)} {tx.sellSymbol} → {tx.buyAmount.toFixed(4)} {tx.buySymbol}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-on-surface-variant/60">{tx.time}</span>
-                  {tx.hash && (
-                    <a
-                      href={`${NETWORK_INFO.blockExplorer}/tx/${tx.hash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                    >
-                      View
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Recent Swaps — merged local history + on-chain events */}
+      <SwapHistory
+        localHistory={swapHistory}
+        onClearLocalHistory={() => setSwapHistory([])}
+      />
 
       {/* Market data cards — $OMNOM stats (copied from Direct Swap) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

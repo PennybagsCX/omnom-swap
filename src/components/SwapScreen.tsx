@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Settings, ChevronDown, UtensilsCrossed, Search, Ghost, X, ExternalLink, AlertTriangle, Sparkles, PenLine } from 'lucide-react';
+import { Settings, ChevronDown, UtensilsCrossed, Search, X, AlertTriangle, Sparkles, PenLine } from 'lucide-react';
 import { useAccount, useBalance, useReadContract, useWriteContract, useChainId, usePublicClient } from 'wagmi';
 import { erc20Abi, parseAbi, parseUnits, formatUnits } from 'viem';
 import { TOKENS, CONTRACTS, NETWORK_INFO, isNativeToken, OMNOM_WWDOGE_POOL, V2_ROUTER_ABI, PRICE_IMPACT_WARN, PRICE_IMPACT_BLOCK, calcPriceImpact, impactColor } from '../lib/constants';
@@ -8,6 +8,7 @@ import { usePoolReserves, useTokenDecimals } from '../hooks/useLiquidity';
 import { useToast } from './ToastContext';
 import { formatCompactPrice, formatCompactAmount } from '../lib/format';
 import { useAutoSlippage } from '../hooks/useAutoSlippage';
+import { SwapHistory } from './aggregator/SwapHistory';
 
 interface SwapTx {
   id: number;
@@ -61,8 +62,6 @@ export function SwapScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [slippage, setSlippage] = useState<string>('0.5');
   const [deadline, setDeadline] = useState<string>('5');
-  const [showHistory, setShowHistory] = useState(false);
-  const [historySearchQuery, setHistorySearchQuery] = useState('');
   // Load swap history from localStorage with validation (Fix 5)
   const [swapHistory, setSwapHistory] = useState<SwapTx[]>(() => {
     try {
@@ -941,73 +940,12 @@ export function SwapScreen() {
           </div>
         </div>
 
-        {/* Swap history */}
+        {/* Swap history — shared SwapHistory component */}
         <div className="mt-4 w-full relative z-10">
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            className="w-full flex items-center justify-between p-4 glass-panel shadow-[0_0_20px_rgba(0,0,0,0.2)] border border-outline-variant/15 hover:border-primary/30 transition-colors cursor-pointer"
-          >
-            <span className="font-headline font-bold uppercase text-sm text-white">Recent Swaps</span>
-            <ChevronDown className={`w-4 h-4 text-on-surface-variant transition-transform ${showHistory ? 'rotate-180' : ''}`} />
-          </button>
-
-          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showHistory ? 'max-h-[600px] opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
-            <div className="glass-panel border border-outline-variant/15 p-4 space-y-3">
-              <div className="relative mb-3">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-variant" />
-                <input
-                  type="text"
-                  placeholder="Search history..."
-                  value={historySearchQuery}
-                  onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  className="w-full bg-surface-container-highest border border-outline-variant/30 text-white pl-7 pr-3 py-2 focus:border-primary outline-none font-body text-xs"
-                />
-              </div>
-              {(() => {
-                const filteredHistory = swapHistory.filter(tx =>
-                  tx.sellSymbol.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-                  tx.buySymbol.toLowerCase().includes(historySearchQuery.toLowerCase())
-                );
-                return filteredHistory.length > 0 ? (
-                <>
-                  {filteredHistory.map(tx => (
-                    <div key={tx.id} className="border-b border-outline-variant/10 pb-2 last:border-0 last:pb-0">
-                      <div className="flex items-center gap-1.5 text-xs flex-wrap">
-                        <span className="font-bold text-white">{fmtAmt(tx.sellAmount)} {tx.sellSymbol}</span>
-                        <UtensilsCrossed className="w-2.5 h-2.5 text-on-surface-variant rotate-90 shrink-0" />
-                        <span className="font-bold text-primary">{fmtAmt(tx.buyAmount)} {tx.buySymbol}</span>
-                        <span className={`text-[9px] font-headline font-bold shrink-0 ${(tx.priceImpact ?? 0) >= PRICE_IMPACT_WARN * 100 ? 'text-yellow-400' : 'text-green-400'}`}>{(tx.priceImpact ?? 0).toFixed(1)}%</span>
-                      </div>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-on-surface-variant">{tx.time}</span>
-                          {tx.hash && (
-                            <a href={`${NETWORK_INFO.blockExplorer}/tx/${tx.hash}`} target="_blank" rel="noopener noreferrer" className="text-on-surface-variant hover:text-primary">
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
-                          )}
-                        </div>
-                        <span className={`text-[9px] font-bold uppercase ${tx.status === 'success' ? 'text-green-400' : tx.status === 'failed' ? 'text-red-400' : 'text-yellow-400'}`}>{tx.status}</span>
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => setSwapHistory([])}
-                    className="w-full mt-2 py-2 text-xs font-headline uppercase tracking-widest text-on-surface-variant hover:text-secondary border border-outline-variant/15 hover:border-secondary/30 transition-colors cursor-pointer"
-                  >
-                    Clear History
-                  </button>
-                </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8 text-on-surface-variant">
-                    <Ghost className="w-12 h-12 mb-3 opacity-20" />
-                    <div className="text-sm font-headline uppercase tracking-widest text-white mb-1">No Swaps Found</div>
-                    <div className="text-[10px] uppercase tracking-wider opacity-60">The void remains empty</div>
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
+          <SwapHistory
+            localHistory={swapHistory}
+            onClearLocalHistory={() => setSwapHistory([])}
+          />
         </div>
 
         {/* Market data cards — $OMNOM stats */}

@@ -13,8 +13,8 @@
 import { useState, useEffect } from 'react';
 import { usePublicClient } from 'wagmi';
 import { formatUnits } from 'viem';
-import { ExternalLink, ChevronDown, Ghost, UtensilsCrossed } from 'lucide-react';
-import { OMNOMSWAP_AGGREGATOR_ADDRESS, NETWORK_INFO, TOKENS, isAggregatorDeployed } from '../../lib/constants';
+import { ExternalLink, ChevronDown, Ghost, UtensilsCrossed, Search } from 'lucide-react';
+import { OMNOMSWAP_AGGREGATOR_ADDRESS, NETWORK_INFO, TOKENS, isAggregatorDeployed, PRICE_IMPACT_WARN } from '../../lib/constants';
 import { formatCompactAmount } from '../../lib/format';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,6 +69,7 @@ export function SwapHistory({ localHistory = [], onClearLocalHistory }: SwapHist
   const [swaps, setSwaps] = useState<SwapEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
 
   // H-05: check if contract is deployed
   const contractDeployed = isAggregatorDeployed();
@@ -168,55 +169,63 @@ export function SwapHistory({ localHistory = [], onClearLocalHistory }: SwapHist
             </div>
           ) : (
             <>
-              {/* Clear history button */}
-              {hasLocalHistory && onClearLocalHistory && (
-                <div className="flex justify-end">
-                  <button
-                    onClick={onClearLocalHistory}
-                    className="text-[10px] text-on-surface-variant/60 hover:text-red-400 transition-colors uppercase tracking-widest font-headline"
-                    aria-label="Clear swap history"
-                  >
-                    Clear History
-                  </button>
-                </div>
-              )}
+              {/* Search input — matches Direct Swap's history search */}
+              <div className="relative mb-3">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-on-surface-variant" />
+                <input
+                  type="text"
+                  placeholder="Search history..."
+                  value={historySearchQuery}
+                  onChange={(e) => setHistorySearchQuery(e.target.value)}
+                  className="w-full bg-surface-container-highest border border-outline-variant/30 text-white pl-7 pr-3 py-2 focus:border-primary outline-none font-body text-xs"
+                />
+              </div>
 
-              {/* Local history entries (most recent first) */}
-              {localHistory.slice(0, 20).map((tx) => (
-                <div key={`local-${tx.id}`} className="border-b border-outline-variant/10 pb-2 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-1.5 text-xs flex-wrap">
-                    <span className="font-bold text-white truncate whitespace-nowrap">
-                      {formatCompactAmount(tx.sellAmount)} {tx.sellSymbol}
-                    </span>
-                    <UtensilsCrossed className="w-2.5 h-2.5 text-on-surface-variant rotate-90 shrink-0" />
-                    <span className="font-bold text-primary truncate whitespace-nowrap">
-                      {formatCompactAmount(tx.buyAmount)} {tx.buySymbol}
-                    </span>
+              {/* Local history entries (most recent first) — matches Direct Swap's layout */}
+              {(() => {
+                const filteredHistory = localHistory.filter(tx =>
+                  tx.sellSymbol.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+                  tx.buySymbol.toLowerCase().includes(historySearchQuery.toLowerCase())
+                );
+                return filteredHistory.length > 0 ? (
+                  <>
+                    {filteredHistory.slice(0, 20).map((tx) => (
+                      <div key={`local-${tx.id}`} className="border-b border-outline-variant/10 pb-2 last:border-0 last:pb-0">
+                        <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                          <span className="font-bold text-white">{formatCompactAmount(tx.sellAmount)} {tx.sellSymbol}</span>
+                          <UtensilsCrossed className="w-2.5 h-2.5 text-on-surface-variant rotate-90 shrink-0" />
+                          <span className="font-bold text-primary">{formatCompactAmount(tx.buyAmount)} {tx.buySymbol}</span>
+                          <span className={`text-[9px] font-headline font-bold shrink-0 ${(tx.priceImpact ?? 0) >= PRICE_IMPACT_WARN * 100 ? 'text-yellow-400' : 'text-green-400'}`}>{(tx.priceImpact ?? 0).toFixed(1)}%</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-on-surface-variant">{tx.time}</span>
+                            {tx.hash && (
+                              <a
+                                href={`${NETWORK_INFO.blockExplorer}/tx/${tx.hash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-on-surface-variant hover:text-primary"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                          </div>
+                          <span className={`text-[9px] font-bold uppercase ${
+                            tx.status === 'success' ? 'text-green-400' : tx.status === 'failed' ? 'text-red-400' : 'text-yellow-400'
+                          }`}>
+                            {tx.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                ) : localHistory.length > 0 ? (
+                  <div className="flex flex-col items-center justify-center py-4 text-on-surface-variant">
+                    <div className="text-[10px] uppercase tracking-wider opacity-60">No matching swaps</div>
                   </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-on-surface-variant">
-                        {tx.time}
-                      </span>
-                      {tx.hash && (
-                        <a
-                          href={`${NETWORK_INFO.blockExplorer}/tx/${tx.hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-on-surface-variant hover:text-primary"
-                        >
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
-                      )}
-                    </div>
-                    <span className={`text-[9px] font-bold uppercase ${
-                      tx.status === 'success' ? 'text-green-400' : tx.status === 'failed' ? 'text-red-400' : 'text-yellow-400'
-                    }`}>
-                      {tx.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ) : null;
+              })()}
 
               {/* Separator between local and on-chain entries */}
               {hasLocalHistory && swaps.length > 0 && (
@@ -237,13 +246,9 @@ export function SwapHistory({ localHistory = [], onClearLocalHistory }: SwapHist
                 return (
                   <div key={`chain-${idx}`} className="border-b border-outline-variant/10 pb-2 last:border-0 last:pb-0">
                     <div className="flex items-center gap-1.5 text-xs flex-wrap">
-                      <span className="font-bold text-white truncate whitespace-nowrap">
-                        {formatCompactAmount(amountInFormatted)} {inSymbol}
-                      </span>
+                      <span className="font-bold text-white">{formatCompactAmount(amountInFormatted)} {inSymbol}</span>
                       <UtensilsCrossed className="w-2.5 h-2.5 text-on-surface-variant rotate-90 shrink-0" />
-                      <span className="font-bold text-primary truncate whitespace-nowrap">
-                        {formatCompactAmount(amountOutFormatted)} {outSymbol}
-                      </span>
+                      <span className="font-bold text-primary">{formatCompactAmount(amountOutFormatted)} {outSymbol}</span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
                       <div className="flex items-center gap-2">
@@ -266,6 +271,16 @@ export function SwapHistory({ localHistory = [], onClearLocalHistory }: SwapHist
                   </div>
                 );
               })}
+
+              {/* Clear history button — matches Direct Swap's bottom placement */}
+              {hasLocalHistory && onClearLocalHistory && (
+                <button
+                  onClick={onClearLocalHistory}
+                  className="w-full mt-2 py-2 text-xs font-headline uppercase tracking-widest text-on-surface-variant hover:text-secondary border border-outline-variant/15 hover:border-secondary/30 transition-colors cursor-pointer"
+                >
+                  Clear History
+                </button>
+              )}
             </>
           )}
         </div>

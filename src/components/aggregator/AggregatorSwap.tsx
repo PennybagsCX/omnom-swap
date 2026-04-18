@@ -74,6 +74,37 @@ function impactColorForAggregator(impact: number): string {
   return impactColor(impact);
 }
 
+// ─── SwapTx interface & type guard for localStorage history ───────────────────
+
+interface SwapTx {
+  id: number;
+  sellAmount: number;
+  sellSymbol: string;
+  buyAmount: number;
+  buySymbol: string;
+  hash?: string;
+  time: string;
+  status: 'success' | 'failed' | 'pending';
+  priceImpact: number;
+}
+
+/** Type guard to validate swap history loaded from localStorage */
+function isValidSwapTx(obj: unknown): obj is SwapTx {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    typeof o.id === 'number' &&
+    typeof o.sellAmount === 'number' &&
+    typeof o.sellSymbol === 'string' &&
+    typeof o.buyAmount === 'number' &&
+    typeof o.buySymbol === 'string' &&
+    (o.hash === undefined || typeof o.hash === 'string') &&
+    typeof o.time === 'string' &&
+    (o.status === 'success' || o.status === 'failed' || o.status === 'pending') &&
+    typeof o.priceImpact === 'number'
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function AggregatorSwap() {
@@ -103,6 +134,22 @@ export function AggregatorSwap() {
   // Confirmation modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+
+  // Load swap history from localStorage with validation
+  const [swapHistory, setSwapHistory] = useState<SwapTx[]>(() => {
+    try {
+      const saved = localStorage.getItem('omnom_aggregator_swap_history');
+      if (!saved) return [];
+      const parsed: unknown = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(isValidSwapTx);
+    } catch { return []; }
+  });
+
+  // Persist swap history to localStorage
+  useEffect(() => {
+    try { localStorage.setItem('omnom_aggregator_swap_history', JSON.stringify(swapHistory.slice(0, 50))); } catch { /* quota exceeded */ }
+  }, [swapHistory]);
 
   /**
    * Frozen route ref — captures the route being executed so the UI displays
@@ -190,10 +237,22 @@ export function AggregatorSwap() {
   const isQuoteStale = stalenessSeconds >= 30;
   const isQuoteVeryStale = stalenessSeconds >= 60;
 
-  // C-04: Refresh balances after swap confirmation + toast notifications
+  // C-04: Refresh balances after swap confirmation + toast notifications + history recording
   useEffect(() => {
     if (isConfirmed && txHash) {
       refreshBalances();
+      // Record successful swap in local history
+      setSwapHistory(prev => [{
+        id: Date.now(),
+        sellAmount: parseFloat(effectiveSellAmount) || 0,
+        sellSymbol: sellToken.symbol,
+        buyAmount: parseFloat(buyAmount) || 0,
+        buySymbol: buyToken.symbol,
+        hash: txHash as string,
+        time: new Date().toLocaleString(),
+        status: 'success',
+        priceImpact: priceImpact * 100,
+      }, ...prev]);
       addToast({
         type: 'success',
         title: 'Swap Confirmed',
@@ -201,12 +260,23 @@ export function AggregatorSwap() {
         link: `${NETWORK_INFO.blockExplorer}/tx/${txHash}`,
       });
     }
-  }, [isConfirmed, txHash, refreshBalances, addToast]);
+  }, [isConfirmed, txHash, refreshBalances, addToast]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Toast notification for swap errors (on-chain revert, wallet rejection, etc.)
+  // Toast notification for swap errors (on-chain revert, wallet rejection, etc.) + history recording
   useEffect(() => {
     if (swapError) {
       const isRevert = swapError.includes('reverted on-chain');
+      // Record failed swap in local history
+      setSwapHistory(prev => [{
+        id: Date.now(),
+        sellAmount: parseFloat(effectiveSellAmount) || 0,
+        sellSymbol: sellToken.symbol,
+        buyAmount: parseFloat(buyAmount) || 0,
+        buySymbol: buyToken.symbol,
+        time: new Date().toLocaleString(),
+        status: 'failed',
+        priceImpact: priceImpact * 100,
+      }, ...prev]);
       addToast({
         type: 'error',
         title: isRevert ? 'Transaction Reverted' : 'Swap Failed',
@@ -216,7 +286,7 @@ export function AggregatorSwap() {
         ...(txHash ? { link: `${NETWORK_INFO.blockExplorer}/tx/${txHash}` } : {}),
       });
     }
-  }, [swapError, addToast, txHash]);
+  }, [swapError, addToast, txHash]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Computed amounts based on active field
   const buyAmount = activeField === 'sell' ? (formattedOutput ?? '0') : buyAmountInput;
@@ -1185,8 +1255,56 @@ export function AggregatorSwap() {
         side={tokenModalSide ?? 'sell'}
       />
 
-      {/* Recent Swaps */}
+      {/* Recent Swaps (on-chain) */}
       <SwapHistory />
+
+      {/* Local Swap History — persisted in localStorage */}
+      {swapHistory.length > 0 && (
+        <div className="bg-surface/80 backdrop-blur-sm rounded-xl border border-outline/20 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-on-surface-variant">
+              Recent Swaps
+              <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-bold leading-none rounded-full bg-primary/20 text-primary">
+                {swapHistory.length}
+              </span>
+            </h3>
+            <button
+              onClick={() => setSwapHistory([])}
+              className="text-xs text-on-surface-variant/60 hover:text-error transition-colors"
+              aria-label="Clear swap history"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {swapHistory.slice(0, 20).map(tx => (
+              <div key={tx.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-surface-container/50">
+                <div className="flex items-center gap-2">
+                  <span className={tx.status === 'success' ? 'text-green-400' : 'text-red-400'}>
+                    {tx.status === 'success' ? '✓' : '✗'}
+                  </span>
+                  <span className="text-on-surface">
+                    {tx.sellAmount.toFixed(4)} {tx.sellSymbol} → {tx.buyAmount.toFixed(4)} {tx.buySymbol}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-on-surface-variant/60">{tx.time}</span>
+                  {tx.hash && (
+                    <a
+                      href={`${NETWORK_INFO.blockExplorer}/tx/${tx.hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      View
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Market data cards — $OMNOM stats (copied from Direct Swap) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

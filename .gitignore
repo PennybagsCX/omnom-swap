@@ -6,6 +6,7 @@ dist/
 
 # Logs
 *.log
+*.tmp
 npm-debug.log*
 
 # OS files

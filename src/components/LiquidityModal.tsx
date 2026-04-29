@@ -251,7 +251,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   // V3 pools can't do LP in Phase 1
   if (isV3) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-headline font-black text-xl uppercase tracking-tighter text-white">{poolName}</h2>
@@ -275,7 +275,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const isUnknownDex = !isKnownDex(dexId);
   if (isUnknownDex) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-headline font-black text-xl uppercase tracking-tighter text-white">{poolName}</h2>
@@ -302,7 +302,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const symB = symbol1 || tokenSymbol(token1);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}>
       <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] flex flex-col max-h-[80vh] my-auto" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-outline-variant/15 shrink-0">
@@ -319,7 +319,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
           )}
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
           {isPoolLoading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
@@ -343,13 +343,13 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
             )}
             {/* Low-liquidity warning */}
             {(reserve0 === 0n || reserve1 === 0n) && (
-              <div className="flex items-center gap-2 mt-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 p-2">
+              <div className="flex items-center justify-center gap-2 mt-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 p-2 text-center">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span className="uppercase tracking-widest">Empty pool — first LP sets the ratio. Use high slippage (5%+).</span>
               </div>
             )}
             {totalSupply > 0n && totalSupply < parseUnits('100', 18) && (
-              <div className="flex items-center gap-2 mt-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 p-2">
+              <div className="flex items-center justify-center gap-2 mt-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 p-2 text-center">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                 <span className="uppercase tracking-widest">Low-liquidity pool — consider using higher slippage (3%+) to avoid transaction failure.</span>
               </div>
@@ -457,13 +457,13 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
               {/* Slippage warning */}
               {slippageError && (
-                <div className="flex items-center gap-2 p-3 text-xs font-headline bg-red-900/20 border border-red-500/30 text-red-400">
+                <div className="flex items-center justify-center gap-2 p-3 text-xs font-headline bg-red-900/20 border border-red-500/30 text-red-400 text-center">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span className="uppercase tracking-widest">{slippageError}</span>
                 </div>
               )}
               {!slippageError && slippageWarning && (
-                <div className="flex items-center gap-2 p-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400">
+                <div className="flex items-center justify-center gap-2 p-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 text-center">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span className="uppercase tracking-widest">{slippageWarning}</span>
                 </div>
@@ -478,7 +478,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
               {/* Low-liquidity warning for Add LP */}
               {((tvl !== undefined && tvl > 0 && tvl < 500) || (reserve0 > 0n && totalSupply < parseUnits('1000', 18))) && (
-                <div className="flex items-start gap-2 p-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400">
+                <div className="flex items-start justify-center gap-2 p-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 text-center">
                   <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                   <div className="uppercase tracking-widest">
                     <span className="font-bold">Low-Liquidity Pool</span>
@@ -579,13 +579,13 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
               {/* Slippage warning */}
               {slippageError && (
-                <div className="flex items-center gap-2 p-3 text-xs font-headline bg-red-900/20 border border-red-500/30 text-red-400">
+                <div className="flex items-center justify-center gap-2 p-3 text-xs font-headline bg-red-900/20 border border-red-500/30 text-red-400 text-center">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span className="uppercase tracking-widest">{slippageError}</span>
                 </div>
               )}
               {!slippageError && slippageWarning && (
-                <div className="flex items-center gap-2 p-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400">
+                <div className="flex items-center justify-center gap-2 p-3 text-xs font-headline bg-yellow-900/20 border border-yellow-500/30 text-yellow-400 text-center">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span className="uppercase tracking-widest">{slippageWarning}</span>
                 </div>
@@ -619,7 +619,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
       {/* Remove LP confirmation overlay */}
       {showRemoveConfirm && !isPending && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center pt-20 pb-4 px-4 bg-black/70 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) setShowRemoveConfirm(false); }}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center pt-20 pb-4 px-4 bg-black/70 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget) setShowRemoveConfirm(false); }}>
           <div className="bg-surface-container-low border border-secondary/30 w-full max-w-sm shadow-[0_0_50px_rgba(157,0,255,0.15)] p-6" onClick={e => e.stopPropagation()}>
             <h3 className="font-headline font-black text-xl uppercase tracking-tighter text-white mb-4 border-b border-outline-variant/15 pb-3">Confirm Withdrawal</h3>
 

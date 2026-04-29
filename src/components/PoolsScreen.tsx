@@ -1,37 +1,18 @@
 import { useState } from 'react';
 import { ExternalLink, Droplets, PawPrint, AlertTriangle, Plus, Minus } from 'lucide-react';
-import { NETWORK_INFO, CONTRACT_REFERENCE, calcPriceImpact, impactColor } from '../lib/constants';
-import { useOmnomData } from '../hooks/useOmnomData';
+import { NETWORK_INFO, calcPriceImpact, impactColor } from '../lib/constants';
+import { useOmnomData, type DexPair } from '../hooks/useOmnomData';
 import { useNewPairMonitor } from '../hooks/useNewPairMonitor';
 import { LiquidityModal } from './LiquidityModal';
 import { formatCompactPrice } from '../lib/format';
-
-interface PoolData {
-  id: string;
-  attributes: {
-    name: string;
-    pool_currency: string;
-    base_token_price_usd: string;
-    quote_token_price_usd: string;
-    reserve_in_usd: string;
-    address: string;
-    volume_usd: { h24: string; h6: string; h1: string };
-    price_change_percentage: { h24: string; h6: string; h1: string };
-    transactions: { h24: { buys: number; sells: number }; h6: { buys: number; sells: number }; h1: { buys: number; sells: number } };
-  };
-  relationships?: {
-    dex?: { data?: { id?: string } };
-  };
-}
 
 const fmtUsd = formatCompactPrice;
 
 const LOW_TVL_THRESHOLD = 500; // Pools below $500 TVL flagged as low-liquidity
 
-function pctChange(val: string | undefined): { text: string; color: string } {
-  if (!val) return { text: '\u2014', color: 'text-on-surface-variant' };
-  const n = parseFloat(val);
-  if (isNaN(n)) return { text: '\u2014', color: 'text-on-surface-variant' };
+function pctChange(val: number | undefined | null): { text: string; color: string } {
+  if (val == null) return { text: '\u2014', color: 'text-on-surface-variant' };
+  const n = val;
   const sign = n >= 0 ? '+' : '';
   return { text: `${sign}${n.toFixed(2)}%`, color: n >= 0 ? 'text-green-400' : 'text-red-400' };
 }
@@ -63,8 +44,8 @@ export function PoolsScreen() {
     setLpModal(prev => ({ ...prev, open: false }));
   };
 
-  const pools = allPools as unknown as PoolData[];
-  const isRateLimited = poolsListError?.message?.includes('429');
+  const pools = allPools as DexPair[];
+  const isRateLimited = !!poolsListError;
   const txns24Total = totalTxns24 ? totalTxns24.buys + totalTxns24.sells : null;
   const hasError = !!poolsListError;
 
@@ -102,7 +83,7 @@ export function PoolsScreen() {
 
       {/* Rate limit warning */}
       {hasError && isRateLimited && pools.length === 0 && (
-        <div className="mb-6 flex items-center bg-yellow-900/20 border border-yellow-500/30 p-4">
+        <div className="mb-6 flex items-center justify-center bg-yellow-900/20 border border-yellow-500/30 p-4 text-center">
           <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mr-2" />
           <div>
             <p className="text-yellow-400 font-headline uppercase tracking-widest text-sm">Pool list temporarily unavailable</p>
@@ -112,7 +93,7 @@ export function PoolsScreen() {
       )}
 
       {hasError && pools.length > 0 && (
-        <div className="mb-4 flex items-center gap-2 bg-yellow-900/20 border border-yellow-500/30 p-3">
+        <div className="mb-4 flex items-center justify-center gap-2 bg-yellow-900/20 border border-yellow-500/30 p-3 text-center">
           <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
           <span className="text-yellow-400 text-xs font-headline uppercase tracking-widest">Showing cached pool list — will refresh automatically</span>
         </div>
@@ -137,22 +118,21 @@ export function PoolsScreen() {
           {/* Mobile card layout */}
           <div className="md:hidden space-y-3">
             {pools.map((pool, i) => {
-              const attr = pool.attributes;
-              const dexId = pool.relationships?.dex?.data?.id?.replace('dogechain_', '') || '';
-              const tvl = parseFloat(attr.reserve_in_usd || '0');
-              const pVol24 = parseFloat(attr.volume_usd?.h24 || '0');
-              const change = pctChange(attr.price_change_percentage?.h24);
-              const pTxns = (attr.transactions?.h24?.buys || 0) + (attr.transactions?.h24?.sells || 0);
-              const price = parseFloat(attr.base_token_price_usd || '0');
-              // $100 reference trade impact estimate (half TVL = sell-side reserve approximation)
+              const dexId = pool.dexId || '';
+              const tvl = pool.liquidity?.usd || 0;
+              const pVol24 = pool.volume?.h24 || 0;
+              const change = pctChange(pool.priceChange?.h24);
+              const pTxns = (pool.txns?.h24?.buys || 0) + (pool.txns?.h24?.sells || 0);
+              const price = parseFloat(pool.priceUsd || '0');
+              const poolName = `${pool.baseToken?.symbol || '?'}/${pool.quoteToken?.symbol || '?'}`;
               const refImpact = tvl > 0 ? calcPriceImpact(100, tvl / 2) : 0;
 
               return (
-                <div key={pool.id} className={`bg-surface-container-low border border-outline-variant/15 p-4 ${i === 0 ? 'border-l-4 border-l-primary bg-primary/5' : ''}`}>
+                <div key={pool.pairAddress} className={`bg-surface-container-low border border-outline-variant/15 p-4 ${i === 0 ? 'border-l-4 border-l-primary bg-primary/5' : ''}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       {i === 0 && <span className="text-[8px] font-headline font-bold text-primary bg-primary/10 border border-primary/20 px-1">PRIMARY</span>}
-                      <span className="font-headline font-bold text-white text-sm">{attr.name}</span>
+                      <span className="font-headline font-bold text-white text-sm">{poolName}</span>
                       {tvl > 0 && tvl < LOW_TVL_THRESHOLD && (
                         <span className="relative group">
                           <span className="flex items-center gap-1 text-[8px] font-headline font-bold text-yellow-400 bg-yellow-900/20 border border-yellow-500/30 px-1.5 py-0.5 cursor-help">
@@ -197,14 +177,14 @@ export function PoolsScreen() {
                   </div>
                   <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/10">
                     <button
-                      onClick={() => openLpModal('add', attr.address, attr.name, dexId, tvl)}
+                      onClick={() => openLpModal('add', pool.pairAddress, poolName, dexId, tvl)}
                       className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-headline font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black transition-colors cursor-pointer whitespace-nowrap"
                     >
                       <Plus className="w-3 h-3" />
                       Add LP
                     </button>
                     <button
-                      onClick={() => openLpModal('remove', attr.address, attr.name, dexId, tvl)}
+                      onClick={() => openLpModal('remove', pool.pairAddress, poolName, dexId, tvl)}
                       className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-headline font-bold uppercase tracking-widest text-secondary bg-secondary/10 border border-secondary/20 hover:bg-secondary hover:text-white transition-colors cursor-pointer whitespace-nowrap"
                     >
                       <Minus className="w-3 h-3" />
@@ -212,7 +192,7 @@ export function PoolsScreen() {
                     </button>
                     <div className="flex-1" />
                     <a
-                      href={`${NETWORK_INFO.blockExplorer}/address/${attr.address}`}
+                      href={`${NETWORK_INFO.blockExplorer}/address/${pool.pairAddress}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-on-surface-variant hover:text-primary transition-colors p-2"
@@ -244,21 +224,21 @@ export function PoolsScreen() {
               </thead>
               <tbody>
                 {pools.map((pool, i) => {
-                  const attr = pool.attributes;
-                  const dexId = pool.relationships?.dex?.data?.id?.replace('dogechain_', '') || '';
-                  const tvl = parseFloat(attr.reserve_in_usd || '0');
-                  const pVol24 = parseFloat(attr.volume_usd?.h24 || '0');
-                  const change = pctChange(attr.price_change_percentage?.h24);
-                  const pTxns = (attr.transactions?.h24?.buys || 0) + (attr.transactions?.h24?.sells || 0);
-                  const price = parseFloat(attr.base_token_price_usd || '0');
+                  const dexId = pool.dexId || '';
+                  const tvl = pool.liquidity?.usd || 0;
+                  const pVol24 = pool.volume?.h24 || 0;
+                  const change = pctChange(pool.priceChange?.h24);
+                  const pTxns = (pool.txns?.h24?.buys || 0) + (pool.txns?.h24?.sells || 0);
+                  const price = parseFloat(pool.priceUsd || '0');
+                  const poolName = `${pool.baseToken?.symbol || '?'}/${pool.quoteToken?.symbol || '?'}`;
                   const refImpact = tvl > 0 ? calcPriceImpact(100, tvl / 2) : 0;
 
                   return (
-                    <tr key={pool.id} className={`border-b border-outline-variant/5 hover:bg-surface-container-high transition-colors ${i === 0 ? 'bg-primary/5' : ''}`}>
+                    <tr key={pool.pairAddress} className={`border-b border-outline-variant/5 hover:bg-surface-container-high transition-colors ${i === 0 ? 'bg-primary/5' : ''}`}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           {i === 0 && <span className="text-[8px] font-headline font-bold text-primary bg-primary/10 border border-primary/20 px-1">PRIMARY</span>}
-                          <span className="font-headline font-bold text-white text-sm">{attr.name}</span>
+                          <span className="font-headline font-bold text-white text-sm">{poolName}</span>
                           {tvl > 0 && tvl < LOW_TVL_THRESHOLD && (
                             <span className="relative group/liq">
                               <AlertTriangle className="w-3 h-3 text-yellow-400 shrink-0 cursor-help" />
@@ -293,7 +273,7 @@ export function PoolsScreen() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => openLpModal('add', attr.address, attr.name, dexId, tvl)}
+                            onClick={() => openLpModal('add', pool.pairAddress, poolName, dexId, tvl)}
                             className="flex items-center gap-1 px-2 py-1 text-[9px] font-headline font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 hover:bg-primary hover:text-black transition-colors cursor-pointer whitespace-nowrap"
                             title="Add Liquidity"
                           >
@@ -301,7 +281,7 @@ export function PoolsScreen() {
                             <span className="hidden md:inline">Add LP</span>
                           </button>
                           <button
-                            onClick={() => openLpModal('remove', attr.address, attr.name, dexId, tvl)}
+                            onClick={() => openLpModal('remove', pool.pairAddress, poolName, dexId, tvl)}
                             className="flex items-center gap-1 px-2 py-1 text-[9px] font-headline font-bold uppercase tracking-widest text-secondary bg-secondary/10 border border-secondary/20 hover:bg-secondary hover:text-white transition-colors cursor-pointer"
                             title="Remove Liquidity"
                           >
@@ -312,7 +292,7 @@ export function PoolsScreen() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <a
-                          href={`${NETWORK_INFO.blockExplorer}/address/${attr.address}`}
+                          href={`${NETWORK_INFO.blockExplorer}/address/${pool.pairAddress}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-on-surface-variant hover:text-primary transition-colors"
@@ -328,30 +308,6 @@ export function PoolsScreen() {
           </div>
         </>
       )}
-
-      {/* Contract Reference — driven by CONTRACT_REFERENCE in constants.ts */}
-      <div className="mt-6 bg-surface-container-low border border-outline-variant/10 p-4">
-        <h3 className="font-headline font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-3">Contract Reference</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs font-mono">
-          {CONTRACT_REFERENCE.map((entry) => {
-            const href = entry.link === 'token'
-              ? `${NETWORK_INFO.blockExplorer}/token/${entry.address}/token-transfers`
-              : entry.link === 'address'
-                ? `${NETWORK_INFO.blockExplorer}/address/${entry.address}`
-                : undefined;
-            return (
-              <div key={entry.label} className="flex gap-4">
-                <span className="text-on-surface-variant w-36 shrink-0">{entry.label}:</span>
-                {href ? (
-                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-white hover:text-primary break-all">{entry.address}</a>
-                ) : (
-                  <span className="text-white break-all">{entry.address}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       <LiquidityModal
         isOpen={lpModal.open}

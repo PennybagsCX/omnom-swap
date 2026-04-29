@@ -12,8 +12,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { parseUnits, formatUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { TOKENS, getTokenDecimals } from '../../lib/constants';
-import { formatCompactAmount } from '../../lib/format';
-import { fetchAllPools } from '../../services/pathFinder/poolFetcher';
+
+import { fetchPoolsForSwap } from '../../services/pathFinder/poolFetcher';
 import { findAllRoutesForOutput } from '../../services/pathFinder';
 import type { RouteResult, PoolReserves, TokenInfo } from '../../services/pathFinder/types';
 
@@ -82,24 +82,8 @@ export function useReverseRoute(
     let prevId: string | null = null;
 
     try {
-      const allPools = wagmiPublicClient
-        ? await fetchAllPools(
-            TOKENS.map((t) => ({
-              address: t.address,
-              symbol: t.symbol,
-              decimals: t.decimals ?? 18,
-              logoURI: t.icon,
-            })),
-            wagmiPublicClient,
-          )
-        : await fetchAllPools(
-            TOKENS.map((t) => ({
-              address: t.address,
-              symbol: t.symbol,
-              decimals: t.decimals ?? 18,
-              logoURI: t.icon,
-            })),
-          );
+      const client = wagmiPublicClient ?? undefined;
+      const allPools = await fetchPoolsForSwap(tokenInAddress, tokenOutAddress, client);
 
       if (seq !== seqRef.current) return; // stale
       setPools(allPools);
@@ -173,14 +157,9 @@ export function useReverseRoute(
     });
   }, [compute]);
 
-  // Formatted input amount (the computed sell amount)
   const inDecimals = tokenInAddress ? getTokenDecimals(tokenInAddress) : 18;
   const formattedInput = route && route.totalAmountIn > 0n
-    ? (() => {
-        const raw = formatUnits(route.totalAmountIn, inDecimals);
-        const num = parseFloat(raw);
-        return formatCompactAmount(num);
-      })()
+    ? formatUnits(route.totalAmountIn, inDecimals)
     : null;
 
   return {

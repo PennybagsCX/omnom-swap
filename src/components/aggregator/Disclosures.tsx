@@ -20,7 +20,9 @@ import {
   Info,
   ChevronDown,
   AlertCircle,
+  FileCode,
 } from 'lucide-react';
+import { NETWORK_INFO, CONTRACT_REFERENCE } from '../../lib/constants';
 
 interface DisclosureSection {
   id: string;
@@ -266,6 +268,12 @@ export function Disclosures() {
             can be added to the registry. The current DEX registry is hardcoded in the frontend and can be verified in the
             open-source code.
           </p>
+          <p>
+            <strong className="text-white">On-chain verification:</strong> Each DEX router is registered
+            on-chain in the aggregator contract. Only registered routers can execute swaps through the
+            aggregator, regardless of what appears in the frontend code. The aggregator contract address
+            and treasury address are listed in the Contract Reference section below.
+          </p>
         </>
       ),
     },
@@ -347,6 +355,33 @@ export function Disclosures() {
         {sections.map((section) => (
           <DisclosureCard key={section.id} section={section} />
         ))}
+      </div>
+
+      {/* ── Contract Reference ── */}
+      <div className="mt-6 bg-surface-container-low border border-outline-variant/10 p-4 md:p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <FileCode className="w-5 h-5 text-primary shrink-0" />
+          <h3 className="font-headline font-bold text-xs uppercase tracking-widest text-on-surface-variant">Contract Reference</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs font-mono">
+          {CONTRACT_REFERENCE.map((entry) => {
+            const href = entry.link === 'token'
+              ? `${NETWORK_INFO.blockExplorer}/token/${entry.address}/token-transfers`
+              : entry.link === 'address'
+                ? `${NETWORK_INFO.blockExplorer}/address/${entry.address}`
+                : undefined;
+            return (
+              <div key={entry.label} className="flex gap-4">
+                <span className="text-on-surface-variant w-36 shrink-0">{entry.label}:</span>
+                {href ? (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-white hover:text-primary break-all">{entry.address}</a>
+                ) : (
+                  <span className="text-white break-all">{entry.address}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

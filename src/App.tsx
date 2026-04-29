@@ -8,7 +8,10 @@ import { TestingDashboard } from './components/aggregator/TestingDashboard';
 import { Disclosures } from './components/aggregator/Disclosures';
 import { TelegramBanner } from './components/TelegramBanner';
 import { ToastProvider } from './components/ToastContext';
+import { MonitorOverlay } from './components/MonitorOverlay';
 import { Construction, Lock } from 'lucide-react';
+import { usePrioritizedTokenLoader } from './hooks/usePrioritizedTokenLoader';
+import { TOKENS } from './lib/constants';
 
 // SHA-256 hash of the admin PIN — avoids storing the plaintext secret in source code
 const ADMIN_PIN_HASH = 'da27aaafac63500f67045ee72fe62f96cb814a00801460539a902d80dbb98b6a';
@@ -38,6 +41,9 @@ function hashToTab(hash: string): TabType {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>(() => hashToTab(window.location.hash));
+
+  // Wallet scan — runs at app root so it survives tab navigation
+  const walletScan = usePrioritizedTokenLoader({ tokens: TOKENS });
 
   /** Navigate to a tab — pushes browser history so back button works */
   const navigateToTab = useCallback((tab: TabType) => {
@@ -78,7 +84,7 @@ export default function App() {
         <TelegramBanner />
 
         <main id="main-content" className="flex-grow pt-20 md:pt-24 pb-8 md:pb-12 px-4 md:px-6 max-w-[1920px] mx-auto w-full relative z-10">
-          {activeTab === 'SWAP' && <UnifiedSwapScreen onTabChange={navigateToTab} />}
+          {activeTab === 'SWAP' && <UnifiedSwapScreen onTabChange={navigateToTab} walletScan={walletScan} />}
           {activeTab === 'POOLS' && <PoolsScreen />}
           {activeTab === 'STATS' && <StatsScreen />}
           {activeTab === 'DASHBOARD' && (
@@ -95,6 +101,7 @@ export default function App() {
         </main>
 
         <Footer activeTab={activeTab} setActiveTab={navigateToTab} />
+        <MonitorOverlay />
       </div>
     </ToastProvider>
   );
@@ -146,7 +153,7 @@ export function LockedScreen({ title, subtitle, icon, onUnlock }: { title: strin
             placeholder="------"
           />
           {error && (
-            <p className="text-red-400 text-xs font-headline uppercase tracking-widest animate-pulse">Incorrect PIN</p>
+            <p className="text-red-400 text-xs font-headline uppercase tracking-widest animate-pulse text-center">Incorrect PIN</p>
           )}
           <button
             type="submit"

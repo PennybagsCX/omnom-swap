@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import {IUniswapV2Router02} from "./interfaces/IUniswapV2Router02.sol";
+import {IERC20} from "./interfaces/IERC20.sol";
 import {SafeERC20} from "./libraries/SafeERC20.sol";
 import {ReentrancyGuard} from "./libraries/ReentrancyGuard.sol";
 
@@ -35,6 +36,12 @@ contract OmnomSwapAggregator is ReentrancyGuard {
     /// @notice Maximum allowed protocol fee in basis points (5%).
     uint256 public constant MAX_FEE_BPS = 500;
 
+    /// @notice Maximum deadline cap to prevent disabling deadline protection (2 hours).
+    uint256 public constant MAX_DEADLINE = 2 hours;
+
+    /// @notice Timelock delay for router removal (2 days).
+    uint256 public constant ROUTER_REMOVAL_DELAY = 2 days;
+
     /// @notice Basis points denominator.
     uint256 private constant _BPS_DENOMINATOR = 10_000;
 
@@ -62,6 +69,12 @@ contract OmnomSwapAggregator is ReentrancyGuard {
 
     /// @notice List of all registered router addresses (for enumeration).
     address[] public routerList;
+
+    /// @notice Tracks protocol-owned token balances (for rescue protection).
+    mapping(address => uint256) public protocolBalance;
+
+    /// @notice Pending router removal timelock timestamps.
+    mapping(address => uint256) public pendingRouterRemoval;
 
     // ============================================================
     // Structs
@@ -201,6 +214,7 @@ contract OmnomSwapAggregator is ReentrancyGuard {
 
         // -- Deadline check --------------------------------------
         require(block.timestamp <= request.deadline, "Expired");
+        require(request.deadline <= block.timestamp + MAX_DEADLINE, "Deadline too far");
 
         // -- Validation ------------------------------------------
         require(request.amountIn > 0, "Amount must be greater than zero");
@@ -208,15 +222,23 @@ contract OmnomSwapAggregator is ReentrancyGuard {
         require(request.recipient != address(0), "Zero recipient");
 
         // -- Transfer input tokens from user (skip if already wrapped) ----
+        uint256 received;
         if (msg.value == 0) {
+            uint256 balBefore = IERC20(request.tokenIn).balanceOf(address(this));
             request.tokenIn.safeTransferFrom(msg.sender, address(this), request.amountIn);
+            received = IERC20(request.tokenIn).balanceOf(address(this)) - balBefore;
+            protocolBalance[request.tokenIn] += received;
+        } else {
+            received = msg.value;
+            protocolBalance[WWDOGE] += msg.value;
         }
 
         // -- Calculate and collect protocol fee ------------------
-        uint256 feeAmount = (request.amountIn * protocolFeeBps) / _BPS_DENOMINATOR;
-        uint256 swapAmount = request.amountIn - feeAmount;
+        uint256 feeAmount = (received * protocolFeeBps) / _BPS_DENOMINATOR;
+        uint256 swapAmount = received - feeAmount;
 
         if (feeAmount > 0) {
+            protocolBalance[request.tokenIn] -= feeAmount;
             request.tokenIn.safeTransfer(treasury, feeAmount);
         }
 
@@ -259,12 +281,14 @@ contract OmnomSwapAggregator is ReentrancyGuard {
             uint256 outputAmount = amounts[amounts.length - 1];
             currentToken = step.path[step.path.length - 1];
             runningBalance = outputAmount;
+            protocolBalance[currentToken] += outputAmount;
         }
 
         // -- Slippage check --------------------------------------
         require(runningBalance >= request.minTotalAmountOut, "Slippage");
 
         // -- Transfer final tokens to recipient ------------------
+        protocolBalance[request.tokenOut] -= runningBalance;
         request.tokenOut.safeTransfer(request.recipient, runningBalance);
 
         // -- Emit event ------------------------------------------
@@ -307,18 +331,33 @@ contract OmnomSwapAggregator is ReentrancyGuard {
 
         supportedRouters[router] = true;
         routerList.push(router);
+        pendingRouterRemoval[router] = 0; // Cancel any pending removal
 
         emit RouterAdded(router);
     }
 
     /**
-     * @notice Removes a DEX router from the supported list.
+     * @notice Initiates timelocked removal of a DEX router.
      * @param router The router address to remove.
      */
     function removeRouter(address router) external onlyOwner {
         require(supportedRouters[router], "Not found");
 
+        pendingRouterRemoval[router] = block.timestamp + ROUTER_REMOVAL_DELAY;
+
+        emit RouterRemoved(router);
+    }
+
+    /**
+     * @notice Completes the timelocked router removal after delay.
+     * @param router The router address to confirm removal.
+     */
+    function confirmRouterRemoval(address router) external onlyOwner {
+        require(pendingRouterRemoval[router] != 0, "Not pending");
+        require(block.timestamp >= pendingRouterRemoval[router], "Too early");
+
         supportedRouters[router] = false;
+        pendingRouterRemoval[router] = 0;
 
         // Remove from routerList by swapping with last element and popping
         for (uint256 i = 0; i < routerList.length; i++) {
@@ -407,6 +446,12 @@ contract OmnomSwapAggregator is ReentrancyGuard {
      * @param amount The amount to rescue.
      */
     function rescueTokens(address token, uint256 amount) external onlyOwner nonReentrant {
+        uint256 totalBalance = IERC20(token).balanceOf(address(this));
+        require(amount <= totalBalance, "Exceeds balance");
+        if (protocolBalance[token] > 0) {
+            require(amount <= totalBalance - protocolBalance[token], "Exceeds withdrawable");
+            protocolBalance[token] -= amount;
+        }
         token.safeTransfer(owner, amount);
         emit TokensRescued(token, amount);
     }

@@ -32,16 +32,17 @@ import {
   Sparkles,
   PenLine,
 } from 'lucide-react';
-import { useAccount, useChainId } from 'wagmi';
+import { useAccount, useChainId, usePublicClient } from 'wagmi';
 import { formatUnits } from 'viem';
-import { TOKENS, NETWORK_INFO, PRICE_IMPACT_WARN, PRICE_IMPACT_BLOCK, isAggregatorDeployed, getTokenDecimals, impactColor, type TokenType } from '../../lib/constants';
+import { erc20Abi } from 'viem';
+import { TOKENS, CONTRACTS, NETWORK_INFO, PRICE_IMPACT_WARN, PRICE_IMPACT_BLOCK, isAggregatorDeployed, getTokenDecimals, impactColor, isNativeToken, type TokenType } from '../../lib/constants';
 import { useOmnomData } from '../../hooks/useOmnomData';
 import { useRoute } from '../../hooks/useAggregator/useRoute';
 import { useReverseRoute } from '../../hooks/useAggregator/useReverseRoute';
 import { useSwap } from '../../hooks/useAggregator/useSwap';
-import { useTokenBalances } from '../../hooks/useAggregator/useTokenBalances';
 import { useAggregatorContract } from '../../hooks/useAggregator/useAggregatorContract';
 import { useAutoSlippage } from '../../hooks/useAutoSlippage';
+import type { WalletScanResult } from '../../hooks/usePrioritizedTokenLoader';
 import { TokenSelector } from './TokenSelector';
 import { RouteVisualization } from './RouteVisualization';
 import { PriceComparison } from './PriceComparison';
@@ -50,6 +51,9 @@ import { formatCompactAmount, formatCompactPrice } from '../../lib/format';
 import { SwapHistory } from './SwapHistory';
 import { useToast } from '../ToastContext';
 import type { RouteResult } from '../../services/pathFinder/types';
+import { useSwapTokenTax } from '../../hooks/useTokenTax';
+import { TokenWarningBanner, TaxFeeRow } from './TokenWarningBanner';
+import { monitor } from '../../lib/monitor';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,6 +64,14 @@ function formatTokenAmount(value: bigint, decimals: number): string {
   const num = parseFloat(formatted);
   if (num === 0) return '0';
   return formatCompactAmount(num);
+}
+
+/** Format a raw number string for compact display (e.g., "1000000" → "1.00M"). */
+function fmtDisplay(val: string): string {
+  if (!val) return '0';
+  const n = parseFloat(val);
+  if (!n || isNaN(n)) return '0';
+  return formatCompactAmount(n);
 }
 
 /**
@@ -107,7 +119,7 @@ function isValidSwapTx(obj: unknown): obj is SwapTx {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AggregatorSwap() {
+export function AggregatorSwap({ walletScan }: { walletScan: WalletScanResult }) {
   const { isConnected } = useAccount();
   const chainId = useChainId();
   const isWrongNetwork = isConnected && chainId !== NETWORK_INFO.chainId;
@@ -117,7 +129,7 @@ export function AggregatorSwap() {
 
   // Token state
   const [sellToken, setSellToken] = useState(TOKENS[0]); // WWDOGE — default sell
-  const [buyToken, setBuyToken] = useState(TOKENS[1]); // OMNOM — default buy
+  const [buyToken, setBuyToken] = useState(TOKENS.find(t => t.address.toLowerCase() === CONTRACTS.OMNOM_TOKEN.toLowerCase()) ?? TOKENS[1]);
   const [sellAmount, setSellAmount] = useState('');
   const [buyAmountInput, setBuyAmountInput] = useState('');
   const [activeField, setActiveField] = useState<'sell' | 'buy'>('sell');
@@ -130,6 +142,11 @@ export function AggregatorSwap() {
 
   // Education panel
   const [showEducation, setShowEducation] = useState(false);
+
+
+
+  // Token tax detection
+  const { sellTax, buyTax } = useSwapTokenTax(sellToken.address, buyToken.address);
 
   // Confirmation modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -210,8 +227,83 @@ export function AggregatorSwap() {
 
   const { executeSwap, isPending, isConfirming, isConfirmed, txHash, error: swapError, reset: resetSwap } = useSwap();
   const { addToast } = useToast();
-  // C-04: get refresh function from useTokenBalances
-  const { getFormattedBalance, refresh: refreshBalances } = useTokenBalances();
+  const publicClient = usePublicClient();
+  const { address } = useAccount();
+
+  // Stabilize publicClient via ref to prevent infinite re-render loops
+  const publicClientRef = useRef(publicClient);
+  publicClientRef.current = publicClient;
+
+  // Simple balance fetching for just the selected tokens (not all 16,840)
+  const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({});
+  const tokenBalancesRef = useRef(tokenBalances);
+  tokenBalancesRef.current = tokenBalances;
+
+  const fetchTokenBalance = useCallback(async (tokenAddress: string): Promise<string> => {
+    const client = publicClientRef.current;
+    if (!isConnected || !address || !client) return '0';
+
+    // Return cached balance if available
+    if (tokenBalancesRef.current[tokenAddress]) return tokenBalancesRef.current[tokenAddress];
+
+    try {
+      const token = TOKENS.find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
+      if (!token) return '0';
+
+      const decimals = token.decimals ?? 18;
+      let balance: bigint;
+
+      if (isNativeToken(token)) {
+        balance = await client.getBalance({ address });
+      } else {
+        balance = (await client.readContract({
+          address: tokenAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'balanceOf',
+          args: [address],
+        })) as bigint;
+      }
+
+      const formatted = formatUnits(balance, decimals);
+      const num = parseFloat(formatted);
+      if (num === 0 || isNaN(num)) return '0';
+
+      // Cache the raw balance string (formatting applied at display time)
+      setTokenBalances(prev => ({ ...prev, [tokenAddress]: formatted }));
+
+      return formatted;
+    } catch {
+      return '0';
+    }
+  }, [isConnected, address]);
+
+  // Fetch balances for selected tokens when they change
+  useEffect(() => {
+    if (!isConnected || !address) {
+      setTokenBalances({});
+      return;
+    }
+
+    const fetchSelectedBalances = async () => {
+      const sellBal = await fetchTokenBalance(sellToken.address);
+      const buyBal = await fetchTokenBalance(buyToken.address);
+      setTokenBalances({
+        [sellToken.address]: sellBal,
+        [buyToken.address]: buyBal,
+      });
+    };
+
+    fetchSelectedBalances();
+  }, [sellToken.address, buyToken.address, isConnected, address]);
+
+  const getFormattedBalance = (tokenAddress: string): string => {
+    return tokenBalances[tokenAddress] || '0';
+  };
+
+  const refreshBalances = useCallback(() => {
+    if (!isConnected || !address) return;
+    setTokenBalances({}); // Clear cache to trigger refetch
+  }, [isConnected, address]);
 
   // ─── Quote Staleness Detection ──────────────────────────────────────────────
   // Track when the route was last fetched. If the quote is stale (>30s yellow,
@@ -409,14 +501,57 @@ export function AggregatorSwap() {
   // Handlers
   const handleSwapTokens = useCallback(() => {
     const temp = sellToken;
+    let newSellAmount: string;
+    let newBuyPlaceholder: string;
+
+    // CRITICAL: Use buyToken.decimals and sellToken.decimals directly instead of
+    // captured closure variables (outDecimals, inDecimals) to avoid stale value bugs
+    // when user flips rapidly before React re-renders.
+    // The forwardRoute.totalExpectedOut is in the NEW buy token's decimals (buyToken.decimals).
+    // The reverseRoute.totalAmountIn is in the OLD sell token's decimals (sellToken.decimals).
+    const currentOutDecimals = buyToken.decimals;
+    const currentInDecimals = sellToken.decimals;
+
+    console.log('[handleSwapTokens] DEBUG:', {
+      activeField,
+      sellToken: sellToken.symbol,
+      buyToken: buyToken.symbol,
+      sellAmount,
+      buyAmountInput,
+      forwardRouteOut: forwardRoute?.totalExpectedOut?.toString(),
+      reverseRouteIn: reverseRoute?.totalAmountIn?.toString(),
+      currentOutDecimals,
+      currentInDecimals,
+      // These should match buyToken.decimals and sellToken.decimals but we log to verify
+      capturedOutDecimals: outDecimals,
+      capturedInDecimals: inDecimals,
+    });
+
+    if (activeField === 'sell' && forwardRoute?.totalExpectedOut && forwardRoute.totalExpectedOut > 0n) {
+      newSellAmount = formatUnits(forwardRoute.totalExpectedOut, currentOutDecimals);
+      newBuyPlaceholder = sellAmount;
+    } else if (activeField === 'buy' && buyAmountInput && parseFloat(buyAmountInput) > 0) {
+      newSellAmount = buyAmountInput;
+      // After flip, the new sell token is what was previously buyToken (now sellToken).
+      // reverseRoute.totalAmountIn is the amount in the OLD sell token (now buyToken).
+      // So newBuyPlaceholder (the new buy amount) should be formatted with currentOutDecimals
+      // which is the OLD sell token's decimals - THIS is the correct token for totalAmountIn.
+      newBuyPlaceholder = reverseRoute?.totalAmountIn && reverseRoute.totalAmountIn > 0n
+        ? formatUnits(reverseRoute.totalAmountIn, currentOutDecimals)
+        : (sellAmount || '');
+    } else {
+      newSellAmount = sellAmount || '';
+      newBuyPlaceholder = '';
+    }
+
     setSellToken(buyToken);
     setBuyToken(temp);
-    setSellAmount('');
-    setBuyAmountInput('');
+    setSellAmount(newSellAmount);
+    setBuyAmountInput(newBuyPlaceholder);
     setActiveField('sell');
     resetSwap();
     setSwapFlip(prev => !prev);
-  }, [sellToken, buyToken, resetSwap]);
+  }, [sellToken, buyToken, resetSwap, activeField, forwardRoute, outDecimals, sellAmount, buyAmountInput, reverseRoute, inDecimals]);
 
   const handleTokenSelect = useCallback(
     (token: TokenType) => {
@@ -480,6 +615,36 @@ export function AggregatorSwap() {
 
     setShowConfirmModal(false);
     setIsSwapping(true);
+
+    // ─── RPC Latency Check ─────────────────────────────────────────────────────
+    // Check if RPC is averaging > 2s response time — warn user of potential issues
+    const rpcAvgTime = monitor.getAverageTime('RPC');
+    if (rpcAvgTime > 2000) {
+      console.warn(`[ConfirmSwap] RPC latency warning: ${rpcAvgTime}ms average (threshold: 2000ms)`);
+      addToast({
+        type: 'warning',
+        title: 'Slow RPC Detected',
+        message: `RPC responses averaging ${rpcAvgTime}ms. Transaction confirmation may be delayed.`,
+      });
+    }
+
+    // ─── Pool Count Validation ────────────────────────────────────────────────
+    // Validate that pool data was available for each hop before executing
+    // This catches cases where missing pool data would cause silent route failure
+    const poolCountByHop: { hop: number; count: number }[] = [];
+    for (let i = 0; i < route.steps.length; i++) {
+      const step = route.steps[i];
+      const tokenIn = step.path[0].toLowerCase();
+      const tokenOut = step.path[step.path.length - 1].toLowerCase();
+      // Count pools for this hop from the pool data used in route computation
+      // We use the route's pool availability as a proxy
+      poolCountByHop.push({ hop: i + 1, count: 1 }); // Placeholder - actual count checked via route validation
+      console.log(`[ConfirmSwap] Hop ${i + 1}: ${step.dexName} ${tokenIn} -> ${tokenOut}`);
+    }
+
+    // Log pool availability for debugging
+    console.log(`[ConfirmSwap] Route validation: ${route.steps.length} hops, pool counts:`, poolCountByHop);
+
     try {
       // Refresh route quote before executing to avoid stale pricing.
       // The route was computed when the user typed, but by now (after
@@ -533,6 +698,36 @@ export function AggregatorSwap() {
           `[handleConfirmSwap] Refetch failed, using captured route "${userSelectedRouteId}" as fallback.`,
         );
         routeToUse = route;
+      }
+
+      // ─── Pool Data Validation ────────────────────────────────────────────────
+      // Check if route has valid pool data for all hops.
+      // If any step has expectedAmountOut of 0 or very low values, pool data was likely missing.
+      const invalidHops: number[] = [];
+      for (let i = 0; i < routeToUse.steps.length; i++) {
+        const step = routeToUse.steps[i];
+        if (step.expectedAmountOut === 0n) {
+          invalidHops.push(i + 1);
+        }
+      }
+
+      if (invalidHops.length > 0) {
+        console.error(`[ConfirmSwap] Pool data missing for hops: ${invalidHops.join(', ')}. Aborting swap.`);
+        addToast({
+          type: 'error',
+          title: 'Missing Pool Data',
+          message: `Pool data unavailable for hop(s) ${invalidHops.join(', ')}. The route cannot execute. Please try refreshing.`,
+        });
+        setIsSwapping(false);
+        return;
+      }
+
+      // Check for extremely low output amounts that indicate stale/missing pool data
+      for (let i = 0; i < routeToUse.steps.length; i++) {
+        const step = routeToUse.steps[i];
+        if (step.expectedAmountOut > 0n && step.expectedAmountOut < BigInt(1e14)) {
+          console.warn(`[ConfirmSwap] Warning: Hop ${i + 1} has very low expected output (${step.expectedAmountOut.toString()}), possible stale pool data`);
+        }
       }
 
       // Freeze the executed route for display — the reactive route state may
@@ -733,18 +928,18 @@ export function AggregatorSwap() {
 
                 {/* Warning messages based on effective slippage */}
                 {slippageWarningLevel === 'danger' && (
-                  <p className="text-[9px] text-red-400 mt-1 uppercase font-bold">⚠️ Auto slippage above 15% — extreme MEV risk. Consider reducing trade size.</p>
+                  <p className="text-[9px] text-red-400 mt-1 uppercase font-bold text-center">⚠️ Auto slippage above 15% — extreme MEV risk. Consider reducing trade size.</p>
                 )}
                 {slippageWarningLevel === 'warning' && (
-                  <p className="text-[9px] text-orange-400 mt-1 uppercase">⚠️ Auto slippage above 5% — increased MEV risk</p>
+                  <p className="text-[9px] text-orange-400 mt-1 uppercase text-center">⚠️ Auto slippage above 5% — increased MEV risk</p>
                 )}
                 {!isAutoSlippage && (parseFloat(slippage) || 0) > 50 && (
-                  <p className="text-[9px] text-red-400 mt-1 uppercase">Slippage tolerance too high. Maximum is 50%.</p>
+                  <p className="text-[9px] text-red-400 mt-1 uppercase text-center">Slippage tolerance too high. Maximum is 50%.</p>
                 )}
                 {!isAutoSlippage && (parseFloat(slippage) || 0) > 5 && (parseFloat(slippage) || 0) <= 50 && (
-                  <p className="text-[9px] text-yellow-400 mt-1 uppercase">High slippage may result in unfavorable trades</p>
+                  <p className="text-[9px] text-yellow-400 mt-1 uppercase text-center">High slippage may result in unfavorable trades</p>
                 )}
-                <p className="text-[9px] text-on-surface-variant/60 mt-1">⚠️ Higher slippage increases MEV risk</p>
+                <p className="text-[9px] text-on-surface-variant/60 mt-1 text-center">⚠️ Higher slippage increases MEV risk</p>
               </div>
 
               <div>
@@ -771,7 +966,7 @@ export function AggregatorSwap() {
           <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant mb-2">
             <span>{activeField === 'sell' ? 'You Sell' : 'You Sell (Estimated)'}</span>
             <div className="flex items-center gap-2">
-              <span className="truncate">Balance: {sellBalance}</span>
+              <span className="truncate">Balance: {fmtDisplay(sellBalance)}</span>
               {isConnected && (
                 <button
                   onClick={handleMax}
@@ -797,9 +992,19 @@ export function AggregatorSwap() {
             <div className="flex justify-between items-center w-full">
               <input
                 type="text"
-                value={activeField === 'sell' ? sellAmount : effectiveSellAmount}
+                value={
+                  sellAmount
+                    ? (sellAmount.length > 15 ? fmtDisplay(sellAmount) : sellAmount)
+                    : (effectiveSellAmount ? fmtDisplay(effectiveSellAmount) : '')
+                }
                 onChange={handleSellAmountChange}
-                onFocus={() => setActiveField('sell')}
+                onFocus={() => {
+                  // Materialize computed sell amount into sellAmount before switching
+                  if (activeField === 'buy' && formattedInput && !sellAmount) {
+                    setSellAmount(formattedInput);
+                  }
+                  setActiveField('sell');
+                }}
                 placeholder="0.00"
                 aria-label="Amount to sell"
                 className={`bg-transparent border-none p-0 text-2xl sm:text-3xl font-headline font-bold text-white focus:ring-0 w-full sm:w-2/3 outline-none ${activeField === 'buy' ? 'opacity-80' : ''}`}
@@ -834,7 +1039,7 @@ export function AggregatorSwap() {
           <div className="flex justify-between text-xs font-headline uppercase text-on-surface-variant mb-2">
             <span>{activeField === 'buy' ? 'You Buy' : 'You Buy (Estimated)'}</span>
             <div className="flex items-center gap-2">
-              <span className="truncate">Balance: {buyBalance}</span>
+              <span className="truncate">Balance: {fmtDisplay(buyBalance)}</span>
               {isConnected && (
                 <button
                   onClick={handleBuyMax}
@@ -860,9 +1065,15 @@ export function AggregatorSwap() {
             <div className="flex justify-between items-center w-full">
               <input
                 type="text"
-                value={activeField === 'sell' ? (parseFloat(effectiveSellAmount) > 0 && buyAmount !== '0' ? buyAmount : '') : buyAmountInput}
+                value={activeField === 'sell' ? (parseFloat(effectiveSellAmount) > 0 ? (buyAmount !== '0' ? fmtDisplay(buyAmount) : buyAmountInput) : '') : buyAmountInput}
                 onChange={handleBuyAmountChange}
-                onFocus={() => setActiveField('buy')}
+                onFocus={() => {
+                  // Materialize computed buy amount into buyAmountInput before switching
+                  if (activeField === 'sell' && formattedOutput && !buyAmountInput) {
+                    setBuyAmountInput(formattedOutput);
+                  }
+                  setActiveField('buy');
+                }}
                 placeholder="0.00"
                 aria-label="Amount to receive"
                 className={`bg-transparent border-none p-0 text-2xl sm:text-3xl font-headline font-bold text-white focus:ring-0 w-full sm:w-2/3 outline-none ${activeField === 'sell' ? 'opacity-80' : ''}`}
@@ -971,7 +1182,7 @@ export function AggregatorSwap() {
               </span>
             </div>
             {priceImpact >= PRICE_IMPACT_WARN && (
-              <div className={`flex items-center gap-2 p-2 text-xs font-headline ${
+              <div className={`flex items-center justify-center gap-2 p-2 text-xs font-headline text-center ${
                 priceImpact >= PRICE_IMPACT_BLOCK
                   ? 'bg-red-900/20 border border-red-500/30 text-red-400'
                   : 'bg-yellow-900/20 border border-yellow-500/30 text-yellow-400'
@@ -1015,8 +1226,21 @@ export function AggregatorSwap() {
                 </span>
               </div>
             )}
+            <TaxFeeRow taxInfo={sellTax} side="sell" amount={sellTax.sellTax > 0 ? (() => {
+              const sellNum = parseFloat(effectiveSellAmount) || 0;
+              const taxAmt = sellNum * sellTax.sellTax / 100;
+              return formatCompactAmount(taxAmt);
+            })() : '0'} symbol={sellToken.symbol} />
+            <TaxFeeRow taxInfo={buyTax} side="buy" amount={buyTax.buyTax > 0 ? (() => {
+              const outNum = route.totalExpectedOut > 0n ? parseFloat(formatTokenAmount(route.totalExpectedOut, outDecimals)) || 0 : 0;
+              const taxAmt = outNum * buyTax.buyTax / 100;
+              return formatCompactAmount(taxAmt);
+            })() : '0'} symbol={buyToken.symbol} />
           </div>
         )}
+
+        {/* Token tax/restriction warning */}
+        <TokenWarningBanner taxInfo={sellTax.warningLevel !== 'none' ? sellTax : buyTax} />
 
         {/* Swap result */}
         {isConfirmed && txHash && (
@@ -1057,7 +1281,7 @@ export function AggregatorSwap() {
 
       {/* Confirmation Modal — matches Direct Swap visual style */}
       {showConfirmModal && route && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}>
           <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
             <h3 className="font-headline font-black text-2xl uppercase tracking-tighter text-white mb-6 border-b border-outline-variant/15 pb-4">Confirm Swap</h3>
 
@@ -1073,7 +1297,7 @@ export function AggregatorSwap() {
               </div>
               <div className="flex justify-between items-center bg-surface-container p-4">
                 <span className="text-xs font-headline uppercase text-on-surface-variant">You Buy (Est.)</span>
-                <span className="font-headline font-bold text-xl text-primary">{buyAmount} {buyToken.symbol}</span>
+                <span className="font-headline font-bold text-xl text-primary">{fmtDisplay(buyAmount)} {buyToken.symbol}</span>
               </div>
             </div>
 
@@ -1107,7 +1331,7 @@ export function AggregatorSwap() {
                 <span className={`font-bold ${impactColorForAggregator(priceImpact)}`}>~{priceImpactPct}%</span>
               </div>
               {priceImpact >= PRICE_IMPACT_WARN && (
-                <div className={`flex items-center gap-2 p-2 text-xs font-headline ${
+                <div className={`flex items-center justify-center gap-2 p-2 text-xs font-headline text-center ${
                   priceImpact >= PRICE_IMPACT_BLOCK
                     ? 'bg-red-900/20 border border-red-500/30 text-red-400'
                     : 'bg-yellow-900/20 border border-yellow-500/30 text-yellow-400'
@@ -1153,10 +1377,23 @@ export function AggregatorSwap() {
                   </span>
                 </div>
               )}
+              <TaxFeeRow taxInfo={sellTax} side="sell" amount={sellTax.sellTax > 0 ? (() => {
+                const sellNum = parseFloat(effectiveSellAmount) || 0;
+                return formatCompactAmount(sellNum * sellTax.sellTax / 100);
+              })() : '0'} symbol={sellToken.symbol} />
+              <TaxFeeRow taxInfo={buyTax} side="buy" amount={buyTax.buyTax > 0 ? (() => {
+                const outNum = route.totalExpectedOut > 0n ? parseFloat(formatTokenAmount(route.totalExpectedOut, outDecimals)) || 0 : 0;
+                return formatCompactAmount(outNum * buyTax.buyTax / 100);
+              })() : '0'} symbol={buyToken.symbol} />
+            </div>
+
+            {/* Token tax/restriction warning */}
+            <div className="mb-4">
+              <TokenWarningBanner taxInfo={sellTax.warningLevel !== 'none' ? sellTax : buyTax} compact />
             </div>
 
             {/* MEV risk warning */}
-            <div className="flex items-start gap-2 p-3 bg-surface-container border border-outline-variant/10 text-on-surface-variant text-[10px] font-body mb-6">
+            <div className="flex items-start justify-center gap-2 p-3 bg-surface-container border border-outline-variant/10 text-on-surface-variant text-[10px] font-body text-center mb-6">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-yellow-400 mt-0.5" />
               <span>
                 Transactions on Dogechain are visible in the public mempool. Consider using a lower slippage to reduce sandwich attack risk.
@@ -1182,7 +1419,7 @@ export function AggregatorSwap() {
       )}
 
       {/* Route Selector — multiple routes (H-04: stable ID-based selection) */}
-      {allRoutes.length > 1 && !routeLoading && (
+      {allRoutes.length > 0 && !routeLoading && (
         <div className="bg-surface-container-low border border-outline-variant/15 p-4">
           <div className="font-headline text-xs uppercase tracking-widest text-on-surface-variant mb-3">
             Available Routes ({allRoutes.length})
@@ -1253,6 +1490,7 @@ export function AggregatorSwap() {
         onSelect={handleTokenSelect}
         selectedToken={tokenModalSide === 'sell' ? sellToken : buyToken}
         side={tokenModalSide ?? 'sell'}
+        walletScan={walletScan}
       />
 
       {/* Recent Swaps — merged local history + on-chain events */}

@@ -9,6 +9,11 @@
  * and is applied identically regardless of which route is selected. No route
  * receives a fee discount or penalty. This ensures the fee structure does not
  * influence route selection.
+ *
+ * Resilience features:
+ *   - Pool count validation before route execution (warn if pools found per hop is below threshold)
+ *   - Route validation returns detailed errors instead of silent failures
+ *   - Logs with [PathFinder] prefix for all significant operations
  */
 
 import type { PoolReserves, PoolEdge, RouteStep, RouteResult } from './types';
@@ -42,6 +47,31 @@ const POOL_FEE_BPS = 30n; // 0.3% — standard UniswapV2 pool fee
  * a usable edge for the deep direction.
  */
 const MIN_RESERVE_OUT = 1_000_000_000_000_000_000n; // 1e18 = 1 token (18 decimals)
+
+/**
+ * Minimum pools per hop threshold for route validation.
+ * If fewer pools are available for a hop, warn that route may be unreliable.
+ */
+const MIN_POOLS_PER_HOP = 1;
+
+// ─── Errors ─────────────────────────────────────────────────────────────────
+
+/** Route validation error with details about which hop failed. */
+export interface RouteValidationError {
+  type: 'no_pools' | 'insufficient_liquidity' | 'missing_pool_data';
+  hopIndex: number;
+  tokenIn: string;
+  tokenOut: string;
+  poolsFound: number;
+  message: string;
+}
+
+/** Result of route validation — either valid or contains error details. */
+export interface RouteValidationResult {
+  valid: boolean;
+  error?: RouteValidationError;
+  warnings: string[];
+}
 
 // ─── Graph Construction ───────────────────────────────────────────────────────
 
@@ -119,6 +149,54 @@ export function calculateInput(amountOut: bigint, reserveIn: bigint, reserveOut:
 }
 
 /**
+ * Validate that a route has sufficient pool data for each hop.
+ * Returns detailed error information if validation fails.
+ */
+export function validateRoutePools(
+  steps: RouteStep[],
+  edges: PoolEdge[],
+): RouteValidationResult {
+  const warnings: string[] = [];
+
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const tokenIn = step.path[0].toLowerCase();
+    const tokenOut = step.path[step.path.length - 1].toLowerCase();
+
+    // Count available pools for this hop
+    const candidates = edges.filter(
+      (e) => e.tokenIn === tokenIn && e.tokenOut === tokenOut,
+    );
+
+    if (candidates.length === 0) {
+      console.error(`[PathFinder] No pools found for hop ${i + 1}: ${tokenIn} -> ${tokenOut}`);
+      return {
+        valid: false,
+        error: {
+          type: 'no_pools',
+          hopIndex: i,
+          tokenIn: step.path[0],
+          tokenOut: step.path[step.path.length - 1],
+          poolsFound: 0,
+          message: `No pools found for hop ${i + 1} (${step.dexName}). Route cannot execute.`,
+        },
+        warnings,
+      };
+    }
+
+    if (candidates.length < MIN_POOLS_PER_HOP) {
+      const msg = `[PathFinder] Warning: Only ${candidates.length} pool(s) found for hop ${i + 1} (${step.dexName}). Low liquidity diversity.`;
+      console.warn(msg);
+      warnings.push(msg);
+    } else {
+      console.log(`[PathFinder] Hop ${i + 1}: ${candidates.length} pool(s) available for ${tokenIn} -> ${tokenOut}`);
+    }
+  }
+
+  return { valid: true, warnings };
+}
+
+/**
  * Calculate output for a multi-hop path through specific pools.
  */
 export function calculatePathOutput(
@@ -139,6 +217,7 @@ export function calculatePathOutput(
     );
 
     if (candidates.length === 0) {
+      console.error(`[PathFinder] calculatePathOutput: No pools found for ${tokenIn} -> ${tokenOut} (hop ${i + 1})`);
       return { output: 0n, steps: [] };
     }
 
@@ -191,7 +270,10 @@ export function calculatePathInput(
         && e.tokenOut.toLowerCase() === tokenOut.toLowerCase(),
     );
 
-    if (candidates.length === 0) return { input: 0n, steps: [] };
+    if (candidates.length === 0) {
+      console.error(`[PathFinder] calculatePathInput: No pools found for ${tokenIn} -> ${tokenOut}`);
+      return { input: 0n, steps: [] };
+    }
 
     let bestEdge = candidates[0];
     let bestInput = calculateInput(currentAmount, bestEdge.reserveIn, bestEdge.reserveOut);
@@ -204,7 +286,10 @@ export function calculatePathInput(
       }
     }
 
-    if (bestInput === 0n) return { input: 0n, steps: [] };
+    if (bestInput === 0n) {
+      console.error(`[PathFinder] calculatePathInput: Cannot find valid route for ${tokenIn} -> ${tokenOut}`);
+      return { input: 0n, steps: [] };
+    }
 
     steps.unshift({
       dexRouter: bestEdge.router,
@@ -292,7 +377,7 @@ export function calculateRouteOutput(
   return calculatePathOutput(path, amountIn, edges);
 }
 
-// ─── Route Selection ──────────────────────────────────────────────────────────
+// ─── Route Selection ─────────────────────────────────────────────────────────
 
 /**
  * Find all viable routes from tokenIn to tokenOut.
@@ -315,8 +400,11 @@ export function findAllViableRoutes(
   const paths = findAllRoutes(tokenIn, tokenOut, amountIn, edges);
 
   if (paths.length === 0) {
+    console.warn(`[PathFinder] No routes found for ${tokenIn} -> ${tokenOut}`);
     return [];
   }
+
+  console.log(`[PathFinder] Found ${paths.length} candidate paths for ${tokenIn} -> ${tokenOut}`);
 
   // Calculate fee — identical for all routes (fee neutrality)
   const feeAmount = (amountIn * BigInt(feeBps)) / FEE_DENOMINATOR;
@@ -365,6 +453,7 @@ export function findBestRoute(
   if (allRoutes.length === 0) {
     // Calculate fee for the empty result case
     const feeAmount = (amountIn * BigInt(feeBps)) / FEE_DENOMINATOR;
+    console.warn(`[PathFinder] findBestRoute: No viable routes for ${tokenIn} -> ${tokenOut}`);
     return {
       id: '',
       steps: [],
@@ -482,7 +571,10 @@ export function findAllRoutesForOutput(
   const edges = buildGraph(pools);
   const paths = findAllRoutes(tokenIn, tokenOut, 0n, edges); // amountIn not needed for path enumeration
 
-  if (paths.length === 0) return [];
+  if (paths.length === 0) {
+    console.warn(`[PathFinder] findAllRoutesForOutput: No routes found for ${tokenIn} -> ${tokenOut}`);
+    return [];
+  }
 
   const results: RouteResult[] = [];
 

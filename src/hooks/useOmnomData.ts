@@ -2,30 +2,35 @@ import { useState, useCallback } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { CONTRACTS, OMNOM_WWDOGE_POOL } from '../lib/constants';
 
-// GeckoTerminal blocks HTTP origins (localhost) and Vercel datacenter IPs.
-// In production (HTTPS), call GeckoTerminal directly — CORS is allowed for HTTPS origins.
-// In development (HTTP localhost), route through the Vite dev server proxy.
 const GECKO_BASE = import.meta.env.PROD
   ? 'https://api.geckoterminal.com/api/v2'
   : '/api/gecko';
-const SLOW_STALE = 600_000; // 10 min for heavy endpoints
-const FAST_STALE = 300_000; // 5 min for primary pool
+const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens';
+const STATS_STALE_MS = 60_000; // 1 min — DexScreener has no rate limits
+const TRADES_STALE_MS = 900_000; // 15 min for GeckoTerminal trades
 const TRADES_PAGE_SIZE = 10;
 
-export interface PoolTxns {
-  buys: number; sells: number; buyers: number; sellers: number;
-}
-
-export interface PoolData {
-  base_token_price_usd: string;
-  quote_token_price_usd: string;
-  volume_usd: { m5: string; m15: string; m30: string; h1: string; h6: string; h24: string };
-  transactions: { m5: PoolTxns; m15: PoolTxns; m30: PoolTxns; h1: PoolTxns; h6: PoolTxns; h24: PoolTxns };
-  price_change_percentage: { m5: string; m15: string; m30: string; h1: string; h6: string; h24: string };
-  reserve_in_usd: string;
-  fdv_usd: string;
-  market_cap_usd: string;
-  name: string;
+export interface DexPair {
+  pairAddress: string;
+  dexId: string;
+  chainId: string;
+  url: string;
+  baseToken: { address: string; name: string; symbol: string };
+  quoteToken: { address: string; name: string; symbol: string };
+  priceNative: string;
+  priceUsd: string;
+  volume: { h24: number; h6: number; h1: number; m5: number };
+  txns: {
+    m5: { buys: number; sells: number };
+    h1: { buys: number; sells: number };
+    h6: { buys: number; sells: number };
+    h24: { buys: number; sells: number };
+  };
+  priceChange: { h1: number; h6: number; h24: number };
+  liquidity: { usd: number; base: number; quote: number };
+  fdv: number;
+  marketCap: number;
+  pairCreatedAt: number;
 }
 
 export interface Trade {
@@ -43,85 +48,43 @@ export interface Trade {
   [key: string]: string | number;
 }
 
-interface PoolListItem {
-  attributes: {
-    address: string;
-    reserve_in_usd: string;
-    volume_usd: { h24: string; h6: string; h1: string };
-    transactions: { h24: { buys: number; sells: number }; h6: { buys: number; sells: number }; h1: { buys: number; sells: number } };
-    [key: string]: unknown;
-  };
-}
-
 const baseOpts = {
   retry: (failureCount: number, error: Error) => {
-    // Retry up to 3 times for 429 rate limits or network errors
-    if (failureCount >= 3) return false;
+    if (failureCount >= 2) return false;
     const msg = error.message || '';
-    return msg.includes('429') || msg.includes('HTTP 429') || msg.includes('Failed to fetch');
+    if (msg.includes('429') || msg.includes('HTTP 429')) return false;
+    return msg.includes('Failed to fetch');
   },
-  retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 10000), // 1s, 2s, 4s
+  retryDelay: (attempt: number) => Math.min(3000 * 2 ** attempt, 15000),
   placeholderData: keepPreviousData,
   refetchOnWindowFocus: false,
   refetchOnReconnect: true,
 } as const;
 
 export function useOmnomData() {
-  // Primary pool — fast, critical for price
-  const poolQuery = useQuery({
-    queryKey: ['omnomPool'],
-    queryFn: async (): Promise<PoolData> => {
-      const res = await fetch(`${GECKO_BASE}/networks/dogechain/pools/${OMNOM_WWDOGE_POOL}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // DexScreener — single API call, no rate limits
+  // Returns ALL OMNOM pairs across ALL DEXes on Dogechain
+  const dexQuery = useQuery({
+    queryKey: ['omnomDexScreener'],
+    queryFn: async (): Promise<DexPair[]> => {
+      const res = await fetch(`${DEXSCREENER_URL}/${CONTRACTS.OMNOM_TOKEN}`);
+      if (!res.ok) throw new Error(`DexScreener HTTP ${res.status}`);
       const json = await res.json();
-      return json.data.attributes;
+      return json.pairs || [];
     },
-    ...baseOpts,
-    staleTime: FAST_STALE,
-    refetchInterval: FAST_STALE,
+    staleTime: STATS_STALE_MS,
+    refetchInterval: STATS_STALE_MS,
   });
 
-  const p = poolQuery.data;
+  const pairs = dexQuery.data ?? [];
 
-  // All pools list — aggregates TVL/volume/txns across ALL DEXes
-  // Fetches ALL pages from GeckoTerminal (pagination-aware) so no pools are missed
-  const POOLS_REFETCH_INTERVAL = 60_000; // 60s — conservative to avoid 429 rate limits
-  const poolsListQuery = useQuery({
-    queryKey: ['omnomPoolsList'],
-    queryFn: async (): Promise<PoolListItem[]> => {
-      const allPools: PoolListItem[] = [];
-      let page = 1;
-      const limit = 30;
-      let lastPage = 1;
+  // Primary pair = highest-liquidity OMNOM/WWDOGE pair (DexScreener sorts by liquidity)
+  const primaryPair = pairs.length > 0
+    ? (pairs.find(p => p.quoteToken?.symbol === 'WWDOGE') ?? pairs[0])
+    : undefined;
 
-      // Fetch pages sequentially until we've fetched the last page
-      do {
-        const res = await fetch(`${GECKO_BASE}/networks/dogechain/tokens/${CONTRACTS.OMNOM_TOKEN}/pools?page=${page}&limit=${limit}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        if (Array.isArray(json.data)) {
-          allPools.push(...json.data);
-        }
-        // GeckoTerminal pagination: meta.page.last indicates the last page number
-        const metaLast = json.meta?.page?.last;
-        if (typeof metaLast === 'number' && metaLast > lastPage) {
-          lastPage = metaLast;
-        }
-        page++;
-      } while (page <= lastPage);
+  // ── Trades — GeckoTerminal (only remaining GeckoTerminal consumer) ──
 
-      return allPools;
-    },
-    ...baseOpts,
-    enabled: !!p, // only fetch after primary pool loads
-    staleTime: SLOW_STALE,
-    refetchInterval: POOLS_REFETCH_INTERVAL,
-  });
-
-  // All pools — needed early for multi-pool trades and aggregation
-  const allPools = poolsListQuery.data ?? [];
-
-  // Trades — recent transactions with pagination
   const [extraTrades, setExtraTrades] = useState<Trade[]>([]);
   const [nextTradesPage, setNextTradesPage] = useState(2);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -141,6 +104,7 @@ export function useOmnomData() {
     ...t.attributes,
   }), []);
 
+  // Primary pool trades
   const tradesQuery = useQuery({
     queryKey: ['omnomTrades'],
     queryFn: async (): Promise<Trade[]> => {
@@ -151,46 +115,34 @@ export function useOmnomData() {
       return json.data.map(mapTrade);
     },
     ...baseOpts,
-    staleTime: FAST_STALE,
-    refetchInterval: FAST_STALE,
+    staleTime: TRADES_STALE_MS,
+    refetchInterval: TRADES_STALE_MS,
   });
 
-  // Multi-pool trades — fetch from other active pools to show all transactions
-  // Uses staggered delays and 429 backoff to respect GeckoTerminal rate limits (30 calls/min)
+  // Multi-pool trades — uses DexScreener pair addresses to find active pools
   const activePoolTradesQuery = useQuery({
-    queryKey: ['omnomMultiPoolTrades', allPools.length],
+    queryKey: ['omnomMultiPoolTrades', pairs.length],
     queryFn: async (): Promise<Trade[]> => {
-      const primaryPoolAddr = OMNOM_WWDOGE_POOL.toLowerCase();
-      const activePools = allPools.filter(pl => {
-        const txns = (pl.attributes.transactions?.h24?.buys || 0) + (pl.attributes.transactions?.h24?.sells || 0);
-        return txns > 0 && pl.attributes.address?.toLowerCase() !== primaryPoolAddr;
-      });
-      const topPools = [...activePools]
+      const primaryAddr = OMNOM_WWDOGE_POOL.toLowerCase();
+      const activePools = pairs
+        .filter(p => {
+          const txns = (p.txns?.h24?.buys || 0) + (p.txns?.h24?.sells || 0);
+          return txns > 0 && p.pairAddress?.toLowerCase() !== primaryAddr;
+        })
         .sort((a, b) => {
-          const aT = (a.attributes.transactions?.h24?.buys || 0) + (a.attributes.transactions?.h24?.sells || 0);
-          const bT = (b.attributes.transactions?.h24?.buys || 0) + (b.attributes.transactions?.h24?.sells || 0);
+          const aT = (a.txns?.h24?.buys || 0) + (a.txns?.h24?.sells || 0);
+          const bT = (b.txns?.h24?.buys || 0) + (b.txns?.h24?.sells || 0);
           return bT - aT;
         })
         .slice(0, 3);
+
       const poolTrades: Trade[] = [];
-      for (let i = 0; i < topPools.length; i++) {
-        const pool = topPools[i];
-        const poolAddr = pool.attributes.address;
+      for (const pool of activePools) {
+        const poolAddr = pool.pairAddress;
         if (!poolAddr) continue;
-        // 500ms stagger between requests to avoid rate limit
-        if (i > 0) await new Promise(r => setTimeout(r, 500));
         try {
           const res = await fetch(`${GECKO_BASE}/networks/dogechain/pools/${poolAddr}/trades?page=1&limit=${TRADES_PAGE_SIZE}`);
-          if (res.status === 429) {
-            // Rate limited — wait 2s and retry once
-            await new Promise(r => setTimeout(r, 2000));
-            const retry = await fetch(`${GECKO_BASE}/networks/dogechain/pools/${poolAddr}/trades?page=1&limit=${TRADES_PAGE_SIZE}`);
-            if (!retry.ok) continue;
-            const json = await retry.json();
-            if (!Array.isArray(json.data)) continue;
-            poolTrades.push(...json.data.map(mapTrade));
-            continue;
-          }
+          if (res.status === 429) break;
           if (!res.ok) continue;
           const json = await res.json();
           if (!Array.isArray(json.data)) continue;
@@ -200,14 +152,13 @@ export function useOmnomData() {
       return poolTrades;
     },
     ...baseOpts,
-    enabled: allPools.length > 0,
-    staleTime: SLOW_STALE,
+    enabled: pairs.length > 0,
+    staleTime: TRADES_STALE_MS,
     refetchInterval: false,
   });
 
   const initialTrades = tradesQuery.data ?? [];
   const hasMoreTrades = initialTrades.length === TRADES_PAGE_SIZE;
-  const isLoadingMoreTrades = isLoadingMore;
 
   const loadMoreTrades = useCallback(async () => {
     if (!hasMoreTrades || isLoadingMore) return;
@@ -239,25 +190,23 @@ export function useOmnomData() {
       return tb - ta;
     });
 
-  // ── Error-aware states — null when query errored with no data ──
-  const poolHasError = !!poolQuery.error && !p;
-  const poolsListHasError = !!poolsListQuery.error && allPools.length === 0;
+  // ── Error-aware states ──
+  const dexHasError = !!dexQuery.error && pairs.length === 0;
 
-  // ── Aggregated stats across ALL pools ──
-  const totalTvl: number | null = poolsListHasError ? null : allPools.reduce((sum, pl) => sum + (Number(pl.attributes.reserve_in_usd) || 0), 0);
-  const totalVol24: number | null = poolsListHasError ? null : allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h24) || 0), 0);
-  const totalVol6: number | null = poolsListHasError ? null : allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h6) || 0), 0);
-  const totalVol1: number | null = poolsListHasError ? null : allPools.reduce((sum, pl) => sum + (Number(pl.attributes.volume_usd?.h1) || 0), 0);
-  const totalTxns24: { buys: number; sells: number } | null = poolsListHasError ? null : allPools.reduce((sum, pl) => ({
-    buys: sum.buys + (pl.attributes.transactions?.h24?.buys || 0),
-    sells: sum.sells + (pl.attributes.transactions?.h24?.sells || 0),
+  // ── Stats from DexScreener ──
+  const priceUsd: number | null = dexHasError ? null : (primaryPair ? Number(primaryPair.priceUsd) || 0 : 0);
+  const fdvUsd: number | null = dexHasError ? null : (primaryPair?.fdv || 0);
+  const marketCapUsd: number | null = dexHasError ? null : (primaryPair?.marketCap || primaryPair?.fdv || 0);
+  const priceChange24 = dexHasError ? null : (primaryPair?.priceChange?.h24 ?? null);
+
+  const totalTvl: number | null = dexHasError ? null : pairs.reduce((sum, p) => sum + (p.liquidity?.usd || 0), 0);
+  const totalVol24: number | null = dexHasError ? null : pairs.reduce((sum, p) => sum + (p.volume?.h24 || 0), 0);
+  const totalVol6: number | null = dexHasError ? null : pairs.reduce((sum, p) => sum + (p.volume?.h6 || 0), 0);
+  const totalVol1: number | null = dexHasError ? null : pairs.reduce((sum, p) => sum + (p.volume?.h1 || 0), 0);
+  const totalTxns24: { buys: number; sells: number } | null = dexHasError ? null : pairs.reduce((sum, p) => ({
+    buys: sum.buys + (p.txns?.h24?.buys || 0),
+    sells: sum.sells + (p.txns?.h24?.sells || 0),
   }), { buys: 0, sells: 0 });
-
-  // ── Price from primary pool ──
-  const priceUsd: number | null = poolHasError ? null : (p ? Number(p.base_token_price_usd) || 0 : 0);
-  const fdvUsd: number | null = poolHasError ? null : (p ? Number(p.fdv_usd) || 0 : 0);
-  const marketCapUsd: number | null = poolHasError ? null : (p ? (Number(p.market_cap_usd) || Number(p.fdv_usd) || 0) : 0);
-  const priceChange24 = poolHasError ? null : (p?.price_change_percentage?.h24 ? parseFloat(p.price_change_percentage.h24) : null);
 
   // ── MEXC CEX price/volume ──
   const mexcQuery = useQuery({
@@ -272,8 +221,8 @@ export function useOmnomData() {
       };
     },
     ...baseOpts,
-    staleTime: FAST_STALE,
-    refetchInterval: FAST_STALE,
+    staleTime: STATS_STALE_MS,
+    refetchInterval: STATS_STALE_MS,
   });
 
   const mexcHasError = !!mexcQuery.error && !mexcQuery.data;
@@ -281,12 +230,11 @@ export function useOmnomData() {
   const mexcVol24: number | null = mexcHasError ? null : (mexcQuery.data?.volume24 ?? 0);
 
   return {
-    pool: p,
-    allPools,
+    allPools: pairs,
     trades,
-    poolCount: allPools.length,
+    poolCount: pairs.length,
 
-    // Price (from primary pool)
+    // Price (from primary pair)
     priceUsd, fdvUsd, marketCapUsd, priceChange24,
 
     // MEXC CEX
@@ -299,14 +247,14 @@ export function useOmnomData() {
 
     // Trades pagination
     hasMoreTrades,
-    isLoadingMoreTrades,
+    isLoadingMoreTrades: isLoadingMore,
     loadMoreTrades,
 
-    isLoading: poolQuery.isLoading,
+    isLoading: dexQuery.isLoading,
     isTradesLoading: tradesQuery.isLoading,
-    isPoolsListLoading: poolsListQuery.isLoading,
-    poolError: poolQuery.error,
+    isPoolsListLoading: dexQuery.isLoading,
+    poolError: dexQuery.error,
     tradesError: tradesQuery.error,
-    poolsListError: poolsListQuery.error,
+    poolsListError: dexQuery.error,
   };
 }

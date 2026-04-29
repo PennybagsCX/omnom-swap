@@ -81,3 +81,40 @@ input[type="number"] {
 .no-scrollbar::-webkit-scrollbar {
     display: none;
 }
+
+/* Yellow-themed scrollbars - site-wide custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: var(--color-surface-container-highest);
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary-dim);
+}
+
+/* Main page scrollbar (html/body level) */
+html::-webkit-scrollbar {
+    width: 10px;
+}
+html::-webkit-scrollbar-track {
+    background: var(--color-background);
+}
+html::-webkit-scrollbar-thumb {
+    background: var(--color-primary);
+    border-radius: 5px;
+}
+html::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary-dim);
+}
+
+/* Firefox scrollbar for main page */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary) var(--color-background);
+}

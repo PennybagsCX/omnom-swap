@@ -224,7 +224,7 @@ function SimulationPanel() {
             <div className="font-headline text-xs uppercase tracking-wider text-on-surface-variant mb-2">
               Pools Discovered ({simPools.length})
             </div>
-            <div className="space-y-1 max-h-40 overflow-y-auto">
+            <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
               {simPools.map((pool, i) => {
                 const t0 = TOKENS.find((t) => t.address.toLowerCase() === pool.token0)?.symbol ?? pool.token0.slice(0, 6);
                 const t1 = TOKENS.find((t) => t.address.toLowerCase() === pool.token1)?.symbol ?? pool.token1.slice(0, 6);

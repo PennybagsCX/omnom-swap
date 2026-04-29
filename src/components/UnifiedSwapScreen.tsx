@@ -15,14 +15,16 @@ import { AggregatorSwap } from './aggregator/AggregatorSwap';
 import { TreasuryDashboard } from './aggregator/TreasuryDashboard';
 import { ErrorBoundary } from '../ErrorBoundary';
 import type { TabType } from '../App';
+import type { WalletScanResult } from '../hooks/usePrioritizedTokenLoader';
 
 type SwapMode = 'direct' | 'aggregated';
 
 interface UnifiedSwapScreenProps {
   onTabChange: (tab: TabType) => void;
+  walletScan: WalletScanResult;
 }
 
-export function UnifiedSwapScreen({ onTabChange }: UnifiedSwapScreenProps) {
+export function UnifiedSwapScreen({ onTabChange, walletScan }: UnifiedSwapScreenProps) {
   const [mode, setMode] = useState<SwapMode>('aggregated');
 
   return (
@@ -65,7 +67,7 @@ export function UnifiedSwapScreen({ onTabChange }: UnifiedSwapScreenProps) {
               <button onClick={() => window.location.reload()} className="mt-3 px-4 py-2 bg-primary/10 border border-primary/20 text-primary text-xs font-headline uppercase hover:bg-primary/20 transition-colors cursor-pointer">Retry Now</button>
             </div>
           }>
-            <AggregatorSwap />
+            <AggregatorSwap walletScan={walletScan} />
           </ErrorBoundary>
 
           {/* Treasury & Swap History — full width, stacked */}

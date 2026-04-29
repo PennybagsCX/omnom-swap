@@ -174,6 +174,10 @@ contract OmnomSwapAggregatorTest is Test {
         vm.prank(owner);
         aggregator.removeRouter(address(router));
 
+        vm.warp(block.timestamp + aggregator.ROUTER_REMOVAL_DELAY() + 1);
+        vm.prank(owner);
+        aggregator.confirmRouterRemoval(address(router));
+
         assertFalse(aggregator.supportedRouters(address(router)));
         assertEq(aggregator.getRouterCount(), 0);
     }
@@ -181,6 +185,10 @@ contract OmnomSwapAggregatorTest is Test {
     function test_RemoveRouter_EmitsEvent() public {
         vm.prank(owner);
         aggregator.removeRouter(address(router));
+
+        vm.warp(block.timestamp + aggregator.ROUTER_REMOVAL_DELAY() + 1);
+        vm.prank(owner);
+        aggregator.confirmRouterRemoval(address(router));
 
         assertFalse(aggregator.supportedRouters(address(router)), "router should be removed");
     }
@@ -199,6 +207,9 @@ contract OmnomSwapAggregatorTest is Test {
         assertEq(aggregator.getRouterCount(), 2);
 
         aggregator.removeRouter(address(router));
+        vm.warp(block.timestamp + aggregator.ROUTER_REMOVAL_DELAY() + 1);
+        aggregator.confirmRouterRemoval(address(router));
+
         assertFalse(aggregator.supportedRouters(address(router)));
         assertTrue(aggregator.supportedRouters(address(router2)));
         assertEq(aggregator.getRouterCount(), 1);
@@ -357,9 +368,9 @@ contract OmnomSwapAggregatorTest is Test {
     }
 
     function test_RescueTokens_RevertInsufficientBalance() public {
-        // Contract has no tokens - MockERC20.transfer reverts with "Insufficient balance"
+        // Contract has no tokens - rescueTokens reverts with "Exceeds balance"
         vm.prank(owner);
-        vm.expectRevert("Insufficient balance");
+        vm.expectRevert("Exceeds balance");
         aggregator.rescueTokens(address(tokenA), 1);
     }
 

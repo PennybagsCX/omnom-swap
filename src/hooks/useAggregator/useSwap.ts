@@ -29,6 +29,7 @@ import {
   WWDOGE_ABI,
 } from '../../lib/constants';
 import type { RouteResult, SwapRequest } from '../../services/pathFinder/types';
+import { isRouterRegistered } from '../../services/pathFinder/poolFetcher';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,15 @@ const MAX_GAS_CAP = 2_000_000n;
 
 /** Extra seconds added per hop for multi-hop routes (more hops = more execution time). */
 const EXTRA_SECONDS_PER_HOP = 30;
+
+/** Minimum output for intermediate steps (prevents MEV with dust amounts). */
+const MIN_INTERMEDIATE_OUT = BigInt('1000000000000'); // 1e12 wei minimum for intermediate steps
+
+/** RPC latency threshold for warning (milliseconds). */
+const RPC_LATENCY_WARNING_MS = 2000;
+
+/** Default timeout for waitForTransactionReceipt (milliseconds). */
+const DEFAULT_RECEIPT_TIMEOUT_MS = 30_000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -297,9 +307,9 @@ export function useSwap() {
           // which is acceptable and better than reverting the entire transaction.
           stepAmountIn = stepMinAmounts[i - 1];
           if (i < route.steps.length - 1) {
-            // Intermediate step: minimal minAmountOut (1 wei for MEV protection)
+            // Intermediate step: use MIN_INTERMEDIATE_OUT instead of 1n for better MEV protection
             // The final minTotalAmountOut check handles overall slippage
-            stepMinOut = 1n;
+            stepMinOut = MIN_INTERMEDIATE_OUT;
           } else {
             // Last step: apply slippage normally
             stepMinOut = stepMinAmounts[i];
@@ -353,9 +363,10 @@ export function useSwap() {
 
         // Cap at 2M to prevent excessive gas costs from wildly inflated estimates
         return bufferedGas > MAX_GAS_CAP ? MAX_GAS_CAP : bufferedGas;
-      } catch {
+      } catch (err) {
         // Gas estimation can fail during network congestion or if the RPC node
         // is overloaded. Fall back to a generous default.
+        console.error('[GasEstimation] Gas estimation failed:', err instanceof Error ? err.message : String(err));
         return FALLBACK_GAS_LIMIT;
       }
     },
@@ -378,6 +389,17 @@ export function useSwap() {
   const validateSwap = useCallback(
     async (route: RouteResult): Promise<string | null> => {
       if (!address || !publicClient) return 'Wallet not connected';
+
+      // Verify all route routers are registered on-chain
+      const unregisteredRouters = new Set<string>();
+      for (const step of route.steps) {
+        if (!isRouterRegistered(step.dexRouter)) {
+          unregisteredRouters.add(step.dexRouter);
+        }
+      }
+      if (unregisteredRouters.size > 0) {
+        return `Route uses unregistered DEX router(s). The swap would fail on-chain. Try refreshing the page or selecting a different route.`;
+      }
 
       const tokenIn = route.steps[0].path[0] as Address;
       const isWwdoge = tokenIn.toLowerCase() === CONTRACTS.WWDOGE.toLowerCase();
@@ -527,8 +549,19 @@ export function useSwap() {
 
             setTxHash(hash);
 
+            // ─── RPC Latency Check ───────────────────────────────────────────
+            // Check if RPC is averaging slow responses — adjust timeout accordingly
+            const rpcAvgTime = (globalThis as unknown as { __OMNOM_DEBUG?: { avgTime?: (s: string) => number } }).__OMNOM_DEBUG?.avgTime?.('RPC');
+            const adjustedTimeout = rpcAvgTime && rpcAvgTime > RPC_LATENCY_WARNING_MS
+              ? DEFAULT_RECEIPT_TIMEOUT_MS + Math.round(rpcAvgTime * 2) // Add 2x average to timeout
+              : DEFAULT_RECEIPT_TIMEOUT_MS;
+
+            if (rpcAvgTime && rpcAvgTime > RPC_LATENCY_WARNING_MS) {
+              console.warn(`[GasEstimation] Slow RPC detected (${rpcAvgTime}ms avg). Adjusted receipt timeout to ${adjustedTimeout}ms`);
+            }
+
             // Wait for confirmation
-            const receipt = await publicClient.waitForTransactionReceipt({ hash });
+            const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: adjustedTimeout });
 
             if (receipt.status === 'success') {
               setIsConfirmed(true);

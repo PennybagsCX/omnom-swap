@@ -7,6 +7,12 @@ import {IERC20} from "../interfaces/IERC20.sol";
  * @title SafeERC20
  * @notice Wraps ERC20 token operations with safety checks.
  *         Handles non-standard tokens that do not return bool on transfer/approve.
+ *         Uses low-level calls to support tokens like Bag/eShrek that return empty bytes.
+ *
+ *         Follows the OpenZeppelin SafeERC20 pattern:
+ *         - If returndata is empty → success (non-standard token, no return value)
+ *         - If returndata has data → decode as bool
+ *         - If the call reverted → bubble up the revert reason
  */
 library SafeERC20 {
     // ============================================================
@@ -28,34 +34,43 @@ library SafeERC20 {
 
     /**
      * @notice Safely transfers tokens from `from` to `to` using `transferFrom`.
-     * @param token The ERC20 token address.
-     * @param from  The sender address.
-     * @param to    The recipient address.
+     *         Handles tokens that return no data (e.g., Bag/eShrek).
+     * @param token  The ERC20 token address.
+     * @param from   The sender address.
+     * @param to     The recipient address.
      * @param amount The number of tokens to transfer.
      */
     function safeTransferFrom(address token, address from, address to, uint256 amount) internal {
-        bool success = IERC20(token).transferFrom(from, to, amount);
-        if (!success) {
+        (bool success, bytes memory returndata) = token.call(
+            abi.encodeCall(IERC20.transferFrom, (from, to, amount))
+        );
+        if (!success) _revert(returndata);
+        if (returndata.length > 0 && !abi.decode(returndata, (bool))) {
             revert SafeTransferFromFailed(from, to, amount);
         }
     }
 
     /**
      * @notice Safely transfers tokens from the caller to `to`.
+     *         Handles tokens that return no data (e.g., Bag/eShrek).
      * @param token  The ERC20 token address.
      * @param to     The recipient address.
      * @param amount The number of tokens to transfer.
      */
     function safeTransfer(address token, address to, uint256 amount) internal {
-        bool success = IERC20(token).transfer(to, amount);
-        if (!success) {
+        (bool success, bytes memory returndata) = token.call(
+            abi.encodeCall(IERC20.transfer, (to, amount))
+        );
+        if (!success) _revert(returndata);
+        if (returndata.length > 0 && !abi.decode(returndata, (bool))) {
             revert SafeTransferFailed(to, amount);
         }
     }
 
     /**
      * @notice Safely approves `spender` to spend `amount` tokens.
-     *         Handles tokens that require resetting approval to 0 first (e.g., USDT).
+     *         Handles tokens that require resetting approval to 0 first (e.g., USDT)
+     *         and tokens that return no data.
      * @param token   The ERC20 token address.
      * @param spender The address to approve.
      * @param amount  The allowance to set.
@@ -64,15 +79,38 @@ library SafeERC20 {
         // First, reset approval to 0 if current allowance is non-zero.
         uint256 currentAllowance = IERC20(token).allowance(address(this), spender);
         if (currentAllowance != 0) {
-            bool resetOk = IERC20(token).approve(spender, 0);
-            if (!resetOk) {
+            (bool resetOk, bytes memory resetData) = token.call(
+                abi.encodeCall(IERC20.approve, (spender, uint256(0)))
+            );
+            if (!resetOk) _revert(resetData);
+            if (resetData.length > 0 && !abi.decode(resetData, (bool))) {
                 revert SafeApproveFailed(spender, 0);
             }
         }
         // Now set the desired allowance.
-        bool setOk = IERC20(token).approve(spender, amount);
-        if (!setOk) {
+        (bool setOk, bytes memory setData) = token.call(
+            abi.encodeCall(IERC20.approve, (spender, amount))
+        );
+        if (!setOk) _revert(setData);
+        if (setData.length > 0 && !abi.decode(setData, (bool))) {
             revert SafeApproveFailed(spender, amount);
+        }
+    }
+
+    // ============================================================
+    // Private Helpers
+    // ============================================================
+
+    /**
+     * @dev Reverts with the reason from a failed low-level call.
+     *      Bubbles up custom errors and string reverts from the callee.
+     */
+    function _revert(bytes memory returndata) private pure {
+        if (returndata.length == 0) {
+            assembly { revert(0, 0) }
+        }
+        assembly {
+            revert(add(32, returndata), mload(returndata))
         }
     }
 }

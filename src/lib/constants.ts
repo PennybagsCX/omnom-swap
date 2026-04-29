@@ -1,4 +1,6 @@
 
+import masterTokenList from '../data/dogechain-tokens.json';
+
 export const NETWORK_INFO = {
   chainId: 2000,
   rpcUrl: import.meta.env.VITE_RPC_URL || 'https://rpc.dogechain.dog',
@@ -26,12 +28,27 @@ export const CONTRACTS = {
   KIBBLESWAP_FACTORY: '0xF4bc79D32A7dEfd87c8A9C100FD83206bbF19Af5',
   // YodeSwap (Dogechain) — standard UniswapV2 with WETH (not WDOGE)
   YODESWAP_ROUTER: '0x72d85ab47fbfc5e7e04a8bcfca1601d8f8ce1a50',
-  YODESWAP_FACTORY: '0xAaA04462e35F3E40d798331657CA015169E005d7',
+  YODESWAP_FACTORY: '0xaAa04462e35F3E40d798331657CA015169E005d7',
+  // FraxSwap (Dogechain) — UniswapV2 compatible
+  FRAXSWAP_ROUTER: '0x0f6A5c5F341791e897eB1FB8fE8B4e30EC4F9bDf',
+  FRAXSWAP_FACTORY: '0x67b7DA7c0564c6aC080f0A6D9fB4675e52E6bF1d',
+  // ToolSwap (Dogechain) — standard UniswapV2 with WETH (not WDOGE)
+  TOOLSWAP_ROUTER: '0x9BBF70e64fbe8Fc7afE8a5Ae90F2DB1165013F93',
+  TOOLSWAP_FACTORY: '0xC3550497E591Ac6ed7a7E03ffC711CfB7412E57F',
+  // IceCreamSwap V2 (Dogechain) — multi-chain UniswapV2 fork, WETH()=WWDOGE
+  ICECREAMSWAP_ROUTER: '0xBb5e1777A331ED93E07cF043363e48d320eb96c4',
+  ICECREAMSWAP_FACTORY: '0x9E6d21E759A7A288b80eef94E4737D313D31c13f',
+  // PupSwap (Dogechain) — UniswapV2 compatible, WETH()=WWDOGE, 95 pairs
+  PUPSWAP_ROUTER: '0x05F2a20AF837268Be340a3bF82BB87069cF4a8C3',
+  PUPSWAP_FACTORY: '0x0EBfEdC4A97D6B761a63Ad7c0a989e384ad59b3d',
+  // Bourbon Defi (Dogechain) — UniswapV2 compatible, WETH()=WWDOGE, 113 pairs
+  BOURBONSWAP_ROUTER: '0x6B172911a5Af8C9Eb2B7759688204624CcC9b0Ee',
+  BOURBONSWAP_FACTORY: '0x6B09Aa7a03d918b08C8924591fc792ce9d80CBb5',
 }
 
-// Structured contract reference list — used by PoolsScreen to render the
-// "Contract Reference" section dynamically.  Adding a new entry here
-// automatically surfaces it in the UI.
+// ─── Contract Reference (Disclosures Page) ──────────────────────────────────
+// NOTE: Must be defined after OMNOMSWAP_AGGREGATOR_ADDRESS and AGGREGATOR_KNOWN_STATE.
+
 export const CONTRACT_REFERENCE: readonly { label: string; address: string; link?: 'token' | 'address' }[] = [
   { label: 'OMNOM Token', address: CONTRACTS.OMNOM_TOKEN, link: 'token' },
   { label: 'WWDOGE', address: CONTRACTS.WWDOGE },
@@ -48,6 +65,18 @@ export const CONTRACT_REFERENCE: readonly { label: string; address: string; link
   { label: 'KibbleSwap Factory', address: CONTRACTS.KIBBLESWAP_FACTORY },
   { label: 'YodeSwap Router', address: CONTRACTS.YODESWAP_ROUTER },
   { label: 'YodeSwap Factory', address: CONTRACTS.YODESWAP_FACTORY },
+  { label: 'FraxSwap Router', address: CONTRACTS.FRAXSWAP_ROUTER },
+  { label: 'FraxSwap Factory', address: CONTRACTS.FRAXSWAP_FACTORY },
+  { label: 'ToolSwap Router', address: CONTRACTS.TOOLSWAP_ROUTER },
+  { label: 'ToolSwap Factory', address: CONTRACTS.TOOLSWAP_FACTORY },
+  { label: 'IceCreamSwap Router', address: CONTRACTS.ICECREAMSWAP_ROUTER },
+  { label: 'IceCreamSwap Factory', address: CONTRACTS.ICECREAMSWAP_FACTORY },
+  { label: 'PupSwap Router', address: CONTRACTS.PUPSWAP_ROUTER },
+  { label: 'PupSwap Factory', address: CONTRACTS.PUPSWAP_FACTORY },
+  { label: 'Bourbon Defi Router', address: CONTRACTS.BOURBONSWAP_ROUTER },
+  { label: 'Bourbon Defi Factory', address: CONTRACTS.BOURBONSWAP_FACTORY },
+  { label: 'OmnomSwap Aggregator', address: '0x88F81031b258A0Fb789AC8d3A8071533BFADeC14', link: 'address' },
+  { label: 'Protocol Treasury', address: '0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88', link: 'address' },
 ] as const;
 
 // Dogechain Bubblemaps — deep-link URL for $OMNOM holder bubble map
@@ -58,20 +87,46 @@ export const BUBBLEMAP_URL = `https://www.dogechain-bubblemaps.xyz/?token=${CONT
 // this pool. Other pairs fall through to V3/V2 router quotes.
 export const OMNOM_WWDOGE_POOL = '0x5bf60ea5cf2383f407f09cf38378176298238a6c';
 
-export const TOKENS = [
-  { symbol: 'WWDOGE', name: 'Wrapped Doge', balance: 0, address: CONTRACTS.WWDOGE, icon: '/tokens/wwdoge.webp', isImage: true, isNative: true, decimals: 18 },
-  { symbol: 'OMNOM', name: 'DogeEatDoge', balance: 0, address: CONTRACTS.OMNOM_TOKEN, icon: '/tokens/omnom.png', isImage: true, decimals: 18 },
-  { symbol: 'DC', name: 'DogeChain Token', balance: 0, address: CONTRACTS.DC_TOKEN, icon: '/tokens/dc.webp', isImage: true, decimals: 18 },
-  { symbol: 'DINU', name: 'Doge Inu', balance: 0, address: CONTRACTS.DINU_TOKEN, icon: '/tokens/dinu.webp', isImage: true, decimals: 18 },
-  // M-04: DST token was defined in CONTRACTS but missing from TOKENS array
-  { symbol: 'DST', name: 'Dogechain Swap Token', balance: 0, address: CONTRACTS.DST_V2_TOKEN, icon: undefined, isImage: false, decimals: 18 },
-];
+// Known token icon overrides — tokens with local images in /public/tokens/
+const TOKEN_ICONS: Record<string, string> = {
+  [CONTRACTS.WWDOGE.toLowerCase()]: '/tokens/wwdoge.webp',
+  [CONTRACTS.OMNOM_TOKEN.toLowerCase()]: '/tokens/omnom.png',
+  [CONTRACTS.DC_TOKEN.toLowerCase()]: '/tokens/dc.webp',
+  [CONTRACTS.DINU_TOKEN.toLowerCase()]: '/tokens/dinu.webp',
+};
+
+export const TOKENS = (masterTokenList as { address: string; symbol: string; name: string; decimals: number }[]).map((t) => {
+  const addr = t.address.toLowerCase();
+  const icon = TOKEN_ICONS[addr];
+  return {
+    symbol: t.symbol,
+    name: t.name,
+    balance: 0,
+    address: t.address,
+    icon,
+    isImage: !!icon,
+    isNative: addr === CONTRACTS.WWDOGE.toLowerCase(),
+    decimals: t.decimals,
+  };
+});
 
 export type TokenType = typeof TOKENS[number];
 
 // Helper to check if a token is native WWDOGE/DOGE
 export function isNativeToken(token: { symbol: string; address: string }): boolean {
   return token.symbol === 'WWDOGE' || token.symbol === 'DOGE' || token.address === CONTRACTS.WWDOGE;
+}
+
+// DogeSwap-native tokens — the only tokens shown in Direct Swap mode
+export const DOGESWAP_NATIVE_TOKENS = new Set([
+  CONTRACTS.WWDOGE.toLowerCase(),
+  CONTRACTS.OMNOM_TOKEN.toLowerCase(),
+  CONTRACTS.DC_TOKEN.toLowerCase(),
+  CONTRACTS.DINU_TOKEN.toLowerCase(),
+]) as ReadonlySet<string>;
+
+export function isDogeSwapNativeToken(token: { address: string }): boolean {
+  return DOGESWAP_NATIVE_TOKENS.has(token.address.toLowerCase());
 }
 
 // Price impact thresholds (fractions, not percentages)
@@ -109,6 +164,21 @@ export function getRouterForDex(dexId: string): `0x${string}` {
   if (lower.includes('yode')) {
     return CONTRACTS.YODESWAP_ROUTER as `0x${string}`;
   }
+  if (lower.includes('frax')) {
+    return CONTRACTS.FRAXSWAP_ROUTER as `0x${string}`;
+  }
+  if (lower.includes('tool')) {
+    return CONTRACTS.TOOLSWAP_ROUTER as `0x${string}`;
+  }
+  if (lower.includes('icecream') || lower.includes('ice cream')) {
+    return CONTRACTS.ICECREAMSWAP_ROUTER as `0x${string}`;
+  }
+  if (lower.includes('pup')) {
+    return CONTRACTS.PUPSWAP_ROUTER as `0x${string}`;
+  }
+  if (lower.includes('bourbon')) {
+    return CONTRACTS.BOURBONSWAP_ROUTER as `0x${string}`;
+  }
   return CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`;
 }
 
@@ -127,6 +197,21 @@ export function getFactoryForDex(dexId: string): `0x${string}` {
   if (lower.includes('yode')) {
     return CONTRACTS.YODESWAP_FACTORY as `0x${string}`;
   }
+  if (lower.includes('frax')) {
+    return CONTRACTS.FRAXSWAP_FACTORY as `0x${string}`;
+  }
+  if (lower.includes('tool')) {
+    return CONTRACTS.TOOLSWAP_FACTORY as `0x${string}`;
+  }
+  if (lower.includes('icecream') || lower.includes('ice cream')) {
+    return CONTRACTS.ICECREAMSWAP_FACTORY as `0x${string}`;
+  }
+  if (lower.includes('pup')) {
+    return CONTRACTS.PUPSWAP_FACTORY as `0x${string}`;
+  }
+  if (lower.includes('bourbon')) {
+    return CONTRACTS.BOURBONSWAP_FACTORY as `0x${string}`;
+  }
   return CONTRACTS.DOGESWAP_FACTORY as `0x${string}`;
 }
 
@@ -140,21 +225,32 @@ export function isKnownDex(dexId: string): boolean {
     lower.includes('chewy') ||
     lower.includes('wojak') ||
     lower.includes('kibble') ||
-    lower.includes('yode')
+    lower.includes('yode') ||
+    lower.includes('frax') ||
+    lower.includes('tool') ||
+    lower.includes('icecream') ||
+    lower.includes('ice cream') ||
+    lower.includes('pup') ||
+    lower.includes('bourbon')
   );
 }
 
 // Human-readable names for supported DEXes (shown in LP modal warning)
-export const KNOWN_DEX_NAMES = ['DogeSwap', 'DogeShrk', 'WOJAK Finance', 'KibbleSwap', 'YodeSwap'] as const;
+export const KNOWN_DEX_NAMES = ['DogeSwap', 'DogeShrk', 'WOJAK Finance', 'KibbleSwap', 'YodeSwap', 'FraxSwap', 'ToolSwap', 'IceCreamSwap', 'PupSwap', 'Bourbon Defi'] as const;
 
 // Check if a router address uses standard ETH function names (addLiquidityETH, swapExactETHForTokens, etc.)
-// DogeShrk, WOJAK, and KibbleSwap all use standard UniswapV2 naming (not WDOGE-specific)
+// DogeShrk, WOJAK, KibbleSwap, ToolSwap all use standard UniswapV2 naming (not WDOGE-specific)
 export function isDogeshrkRouter(routerAddress: string): boolean {
   const lower = routerAddress.toLowerCase();
   return lower === CONTRACTS.DOGESHRK_V2_ROUTER.toLowerCase()
     || lower === CONTRACTS.WOJAK_ROUTER.toLowerCase()
     || lower === CONTRACTS.KIBBLESWAP_ROUTER.toLowerCase()
-    || lower === CONTRACTS.YODESWAP_ROUTER.toLowerCase();
+    || lower === CONTRACTS.YODESWAP_ROUTER.toLowerCase()
+    || lower === CONTRACTS.FRAXSWAP_ROUTER.toLowerCase()
+    || lower === CONTRACTS.TOOLSWAP_ROUTER.toLowerCase()
+    || lower === CONTRACTS.ICECREAMSWAP_ROUTER.toLowerCase()
+    || lower === CONTRACTS.PUPSWAP_ROUTER.toLowerCase()
+    || lower === CONTRACTS.BOURBONSWAP_ROUTER.toLowerCase();
 }
 
 import { parseAbi } from 'viem';
@@ -273,4 +369,9 @@ export const DEX_REGISTRY = [
   { name: 'WOJAK Finance', router: CONTRACTS.WOJAK_ROUTER, factory: CONTRACTS.WOJAK_FACTORY },
   { name: 'KibbleSwap', router: CONTRACTS.KIBBLESWAP_ROUTER, factory: CONTRACTS.KIBBLESWAP_FACTORY },
   { name: 'YodeSwap', router: CONTRACTS.YODESWAP_ROUTER, factory: CONTRACTS.YODESWAP_FACTORY },
+  { name: 'FraxSwap', router: CONTRACTS.FRAXSWAP_ROUTER, factory: CONTRACTS.FRAXSWAP_FACTORY },
+  { name: 'ToolSwap', router: CONTRACTS.TOOLSWAP_ROUTER, factory: CONTRACTS.TOOLSWAP_FACTORY },
+  { name: 'IceCreamSwap', router: CONTRACTS.ICECREAMSWAP_ROUTER, factory: CONTRACTS.ICECREAMSWAP_FACTORY },
+  { name: 'PupSwap', router: CONTRACTS.PUPSWAP_ROUTER, factory: CONTRACTS.PUPSWAP_FACTORY },
+  { name: 'Bourbon Defi', router: CONTRACTS.BOURBONSWAP_ROUTER, factory: CONTRACTS.BOURBONSWAP_FACTORY },
 ] as const;

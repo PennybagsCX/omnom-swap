@@ -28,6 +28,11 @@ contract SetupAggregator is Script {
     address constant WOJAK_ROUTER        = 0x9695906B4502D5397E6D21ff222e2C1a9e5654a9;
     address constant KIBBLESWAP_ROUTER   = 0x6258c967337D3faF0C2ba3ADAe5656bA95419d5f;
     address constant YODESWAP_ROUTER     = 0x72d85Ab47fBfc5E7E04a8bcfCa1601D8f8cE1a50;
+    address constant FRAXSWAP_ROUTER     = 0x0f6A5c5F341791e897eB1FB8fE8B4e30EC4F9bDf;
+    address constant TOOLSWAP_ROUTER     = 0x9BBF70e64fbe8Fc7afE8a5Ae90F2DB1165013F93;
+    address constant ICECREAMSWAP_ROUTER  = 0xBb5e1777A331ED93E07cF043363e48d320eb96c4;
+    address constant PUPSWAP_ROUTER       = 0x05F2a20AF837268Be340a3bF82BB87069cF4a8C3;
+    address constant BOURBONSWAP_ROUTER   = 0x6B172911a5Af8C9Eb2B7759688204624CcC9b0Ee;
 
     /// @notice All known Dogechain DEX routers for registration.
     address[] internal KNOWN_ROUTERS = [
@@ -35,7 +40,12 @@ contract SetupAggregator is Script {
         DOGESHRK_V2_ROUTER,
         WOJAK_ROUTER,
         KIBBLESWAP_ROUTER,
-        YODESWAP_ROUTER
+        YODESWAP_ROUTER,
+        FRAXSWAP_ROUTER,
+        TOOLSWAP_ROUTER,
+        ICECREAMSWAP_ROUTER,
+        PUPSWAP_ROUTER,
+        BOURBONSWAP_ROUTER
     ];
 
     function run() external {

@@ -15,8 +15,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { parseUnits, formatUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { TOKENS, getTokenDecimals } from '../../lib/constants';
-import { formatCompactAmount } from '../../lib/format';
-import { fetchAllPools } from '../../services/pathFinder/poolFetcher';
+
+import { fetchPoolsForSwap } from '../../services/pathFinder/poolFetcher';
 import { findAllViableRoutes, getPerDexQuotes } from '../../services/pathFinder';
 import type { RouteResult, PoolReserves, TokenInfo } from '../../services/pathFinder/types';
 
@@ -97,25 +97,8 @@ export function useRoute(
     let prevId: string | null = null;
 
     try {
-      // H-07: pass wagmi client to pool fetcher
-      const allPools = wagmiPublicClient
-        ? await fetchAllPools(
-            TOKENS.map((t) => ({
-              address: t.address,
-              symbol: t.symbol,
-              decimals: t.decimals ?? 18,
-              logoURI: t.icon,
-            })),
-            wagmiPublicClient,
-          )
-        : await fetchAllPools(
-            TOKENS.map((t) => ({
-              address: t.address,
-              symbol: t.symbol,
-              decimals: t.decimals ?? 18,
-              logoURI: t.icon,
-            })),
-          );
+      const client = wagmiPublicClient ?? undefined;
+      const allPools = await fetchPoolsForSwap(tokenInAddress, tokenOutAddress, client);
 
       if (seq !== seqRef.current) return; // stale
       setPools(allPools);
@@ -210,14 +193,9 @@ export function useRoute(
     });
   }, [compute]);
 
-  // H-02: expose formatted output amount directly to avoid BigInt→Number conversion
   const outDecimals = tokenOutAddress ? getTokenDecimals(tokenOutAddress) : 18;
   const formattedOutput = route && route.totalExpectedOut > 0n
-    ? (() => {
-        const raw = formatUnits(route.totalExpectedOut, outDecimals);
-        const num = parseFloat(raw);
-        return formatCompactAmount(num);
-      })()
+    ? formatUnits(route.totalExpectedOut, outDecimals)
     : null;
 
   // Price quote kept for backward compatibility but consumers should prefer formattedOutput

@@ -210,6 +210,18 @@ const [sellAmount, setSellAmount] = useState<string>('');
     }
   }, [activeField, computedSellAmount]);
 
+  // Retry effect: when pool data becomes available and there's a pending buy input,
+  // force recalculation of sell amount. This handles the race condition where user
+  // types in BUY field before pool data is loaded.
+  useEffect(() => {
+    if (activeField !== 'buy' || parsedBuyInput <= 0) return;
+    // Pool data just became available (was null/undefined before)
+    // Trigger recalculation by reading computedSellAmount fresh
+    if (poolT0 && poolT1 && computedSellAmount !== '') {
+      setSellAmount(computedSellAmount);
+    }
+  }, [activeField, poolT0, poolT1, parsedBuyInput, computedSellAmount]);
+
   // Price quoting via V2 router (primary source on Dogechain)
   const effectiveSellAmount = activeField === 'sell' ? sellAmount : (computedSellAmount || sellAmount);
   const effectiveParsedSell = parseFloat(effectiveSellAmount) || 0;

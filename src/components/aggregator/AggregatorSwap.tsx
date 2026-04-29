@@ -294,6 +294,7 @@ export function AggregatorSwap({ walletScan }: { walletScan: WalletScanResult })
     };
 
     fetchSelectedBalances();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sellToken.address, buyToken.address, isConnected, address]);
 
   const getFormattedBalance = (tokenAddress: string): string => {

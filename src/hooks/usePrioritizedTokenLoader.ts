@@ -164,6 +164,7 @@ export function usePrioritizedTokenLoader({ tokens }: UsePrioritizedTokenLoaderP
             address: MULTICALL3_ADDRESS,
             abi: MULTICALL3_ABI,
             functionName: 'aggregate3',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             args: [calls as any],
           });
 
@@ -171,6 +172,7 @@ export function usePrioritizedTokenLoader({ tokens }: UsePrioritizedTokenLoaderP
 
           for (let j = 0; j < batch.length; j++) {
             const token = batch[j];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = (multicallResults as any)[j];
 
             if (isNativeToken(token)) {

@@ -51,6 +51,7 @@ class OmnomMonitor {
     if (!this.enabled || typeof globalThis.fetch === 'undefined') return;
 
     const originalFetch = globalThis.fetch;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
 
     globalThis.fetch = function patchedFetch(input: RequestInfo | URL, init?: RequestInit) {

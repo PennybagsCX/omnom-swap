@@ -2,6 +2,10 @@
 
 OmnomSwap is a multi-DEX aggregator that scans all active UniswapV2-fork DEXes on Dogechain to find the optimal swap price. It combines an on-chain aggregator contract, an off-chain pathfinder, and a React frontend into a single integrated system.
 
+## Deployment
+
+This project auto-deploys to Vercel on every push to the `main` branch. The production deployment is available at the Vercel project linked to this repository.
+
 ## Architecture
 
 OmnomSwap has three layers:

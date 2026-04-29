@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build artifacts (we want Vite to rebuild these)
+dist/
+
+# Foundry artifacts (not needed for frontend)
+out/
+cache/
+broadcast/
+
+# Git
+.git/
+.gitignore
+
+# Environment files (don't expose these)
+.env
+.env.*
+
+# Test files
+test/
+*.test.ts
+*.test.tsx
+
+# Foundry
+lib/forge-std/
+
+# Documentation
+docs/
+README.md
+*.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Screenshots and logs
+screenshots/
+*.log
+console-log.md
+info.md

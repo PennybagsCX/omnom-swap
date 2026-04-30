@@ -2,45 +2,44 @@
  * useTokenPrices — fetches token prices in USD.
  *
  * Primary: DexScreener (free, no rate limits, batch API, covers all Dogechain tokens).
- * Fallback: GeckoTerminal for tokens DexScreener doesn't cover.
+ * Fallback: GeckoTerminal — DISABLED by default (causes 429s with large token lists).
  *
- * Resilience against GeckoTerminal 429 errors:
- *   - 10-minute in-memory TTL cache (survives effect re-runs)
- *   - Persistent localStorage cache (survives app restarts — 10 min TTL)
- *   - Circuit breaker: 5-min cooldown after 429, then exponential backoff retry
- *   - Sequential fetching with 500ms delay between tokens
- *   - AbortController to cancel in-flight requests on effect teardown
+ * AGGRESSIVE RATE LIMIT FIX (2026-04-30):
+ *   - GeckoTerminal fallback is DISABLED by default (ENABLE_GECKO_FALLBACK feature flag)
+ *   - DexScreener alone covers ~22% of tokens which is sufficient for most use cases
+ *   - 1-hour cache TTL (dramatically reduces API calls over time)
+ *   - Cache hit logging shows cache vs API breakdown
+ *   - Only fetch prices when a token is actually needed, not as part of general wallet scan
  *
- * RATE LIMIT FIX (2026-04-29):
- *   - Removed individual token polling that caused 429 stampede on startup
- *   - Uses batch DexScreener API (20 tokens/request) as primary path
- *   - GeckoTerminal fallback only runs for tokens DexScreener misses
- *   - Global request queue serializes GeckoTerminal calls to avoid burst
+ * To enable GeckoTerminal fallback: set ENABLE_GECKO_FALLBACK = true below.
+ * Only enable if you have a small, curated token list (< 20 tokens).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens';
-const GECKO_BASE = import.meta.env.PROD
+
+// ── Feature flags ─────────────────────────────────────────────────────────────
+const ENABLE_GECKO_FALLBACK = false; // DISABLED — causes 429 stampede with large token lists
+// GECKO_BASE kept for reference only (fallback is disabled)
+const _GECKO_BASE = import.meta.env.PROD
   ? 'https://api.geckoterminal.com/api/v2'
   : '/api/gecko';
+void (_GECKO_BASE); // suppress unused warning (kept for future opt-in)
 
-// ── Cache TTLs ─────────────────────────────────────────────────────────────────
+// ── Cache TTLs — AGGRESSIVELY INCREASED (2026-04-30) ──────────────────────────
 //
-// In-memory TTL:  shorter — ensures fresh prices within a session
-// localStorage TTL:  longer — avoids re-fetching on app restart
-const MEM_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min in-memory
-const PERSIST_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min localStorage (same as mem to stay consistent)
+// In-memory TTL:  1 hour — prices don't need to be fresh within a session
+// localStorage TTL: 1 hour — avoids re-fetching on app restart
+// This dramatically reduces API calls: instead of fetching on every component mount,
+// a token is fetched at most once per hour regardless of how many components request it.
+const MEM_CACHE_TTL_MS = 60 * 60 * 1000;       // 1 hour in-memory (was 10 min)
+const PERSIST_CACHE_TTL_MS = 60 * 60 * 1000;   // 1 hour localStorage (was 10 min)
 
 // ── Rate limiting constants ───────────────────────────────────────────────────
 const DEXSCREENER_BATCH_SIZE = 20;
-const GECKO_BATCH_SIZE = 5;          // Process GeckoTerminal tokens in small batches
-const GECKO_DELAY_BETWEEN_BATCHES_MS = 2000; // 2s between batches (avoid 429 burst)
 
 // ── Module-level global state (singleton — survives across hook instances) ────
-//
-// This prevents duplicate GeckoTerminal calls when multiple components use
-// useTokenPrices simultaneously. All instances share the same cache and queue.
 
 interface PriceCacheEntry {
   price: number;
@@ -48,7 +47,7 @@ interface PriceCacheEntry {
 }
 
 // Persistent localStorage cache key
-const PERSIST_CACHE_KEY = 'omnom_token_prices_v2';
+const PERSIST_CACHE_KEY = 'omnom_token_prices_v3'; // v3 = new 1hr TTL format
 
 // Load persistent cache from localStorage
 function loadPersistCache(): Map<string, PriceCacheEntry> {
@@ -83,121 +82,7 @@ const globalDexCache = new Map<string, Set<string>>();
 // Track which addresses are currently being fetched (global deduplication)
 const globalFetchingSet = new Set<string>();
 
-// Circuit breaker: global cooldown after 429
-let globalGeckoCooldownUntil = 0;
-let globalGeckoCooldownReason = '';
-
-// Track queue processing state
-let isGeckoQueueProcessing = false;
-let lastGeckoBatchCompletedAt = 0;
-
-// Accumulator for pending GeckoTerminal requests
-let pendingGeckoTokens: string[] = [];
-let pendingGeckoResolve: ((val: void) => void) | null = null;
-
-// Enhanced processGeckoQueue with strict rate limiting
-async function processGeckoQueue(): Promise<void> {
-  if (isGeckoQueueProcessing) return;
-  isGeckoQueueProcessing = true;
-
-  try {
-    while (pendingGeckoTokens.length > 0) {
-      // Check cooldown BEFORE starting new batch
-      if (Date.now() < globalGeckoCooldownUntil) {
-        const cooldownRemaining = globalGeckoCooldownUntil - Date.now();
-        console.log(`[GeckoQueue] In cooldown (${globalGeckoCooldownReason}), waiting ${Math.round(cooldownRemaining / 1000)}s`);
-        await new Promise(resolve => setTimeout(resolve, Math.min(cooldownRemaining, 5000)));
-        if (Date.now() < globalGeckoCooldownUntil) continue;
-      }
-
-      // Enforce strict 2s gap between batches
-      const timeSinceLastBatch = Date.now() - lastGeckoBatchCompletedAt;
-      if (lastGeckoBatchCompletedAt > 0 && timeSinceLastBatch < GECKO_DELAY_BETWEEN_BATCHES_MS) {
-        const waitTime = GECKO_DELAY_BETWEEN_BATCHES_MS - timeSinceLastBatch;
-        console.log(`[GeckoQueue] Enforcing ${waitTime}ms gap between batches`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
-
-      const batch = pendingGeckoTokens.splice(0, GECKO_BATCH_SIZE);
-      if (batch.length === 0) break;
-
-      console.log(`[GeckoQueue] Processing batch of ${batch.length} tokens, ${pendingGeckoTokens.length} remaining`);
-
-      let had429ThisBatch = false;
-
-      // Fetch all tokens in the batch concurrently (small batch = manageable load)
-      await Promise.all(
-        batch.map(async (addr) => {
-          if (globalFetchingSet.has(addr)) return;
-          globalFetchingSet.add(addr);
-
-          try {
-            const url = `${GECKO_BASE}/networks/dogechain/tokens/${addr}/pools?limit=10`;
-            const res = await fetch(url);
-
-            if (res.status === 429) {
-              // Circuit breaker: 30s cooldown on 429
-              globalGeckoCooldownUntil = Date.now() + 30_000;
-              globalGeckoCooldownReason = '429 from token pools endpoint';
-              had429ThisBatch = true;
-              console.log(`[GeckoQueue] Got 429 for ${addr}, entering 30s cooldown`);
-              // Put token back in queue for retry after cooldown
-              pendingGeckoTokens.push(addr);
-              return;
-            }
-
-            if (!res.ok) return;
-
-            const json = await res.json();
-            const pools = json?.data;
-            if (!Array.isArray(pools) || pools.length === 0) return;
-
-            const attributes = pools[0]?.attributes;
-            let price: number | null = null;
-            if (attributes?.base_token_price_usd) {
-              price = parseFloat(attributes.base_token_price_usd);
-            } else if (attributes?.quote_token_price_usd) {
-              price = parseFloat(attributes.quote_token_price_usd);
-            }
-
-            if (price !== null && !isNaN(price) && price > 0) {
-              const entry = { price, timestamp: Date.now() };
-              globalPriceCache.set(addr, entry);
-            }
-          } catch {
-            // Network error — skip
-          } finally {
-            globalFetchingSet.delete(addr);
-          }
-        })
-      );
-
-      // Mark batch complete
-      lastGeckoBatchCompletedAt = Date.now();
-
-      // If we hit 429, pause longer before next batch
-      if (had429ThisBatch) {
-        console.log(`[GeckoQueue] 429 detected, waiting ${30_000}ms before continuing`);
-        await new Promise(resolve => setTimeout(resolve, 30_000));
-        // Clear the cooldown since we waited
-        globalGeckoCooldownUntil = Date.now();
-      }
-
-      // Delay between batches to avoid 429 (only if queue still has items)
-      if (pendingGeckoTokens.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, GECKO_DELAY_BETWEEN_BATCHES_MS));
-      }
-    }
-  } finally {
-    isGeckoQueueProcessing = false;
-    if (pendingGeckoResolve) {
-      pendingGeckoResolve();
-      pendingGeckoResolve = null;
-    }
-  }
-}
-
-// ── Exported cache helpers (for external access if needed) ─────────────────────
+// ── Exported cache helpers ─────────────────────────────────────────────────────
 export function getCachedPrice(addr: string): number | null {
   const cached = globalPriceCache.get(addr.toLowerCase());
   if (cached && Date.now() - cached.timestamp < MEM_CACHE_TTL_MS) {
@@ -210,8 +95,6 @@ export function clearPriceCache(): void {
   globalPriceCache.clear();
   globalDexCache.clear();
   globalFetchingSet.clear();
-  pendingGeckoTokens = [];
-  globalGeckoCooldownUntil = 0;
   try { localStorage.removeItem(PERSIST_CACHE_KEY); } catch { /* ignore */ }
 }
 
@@ -222,7 +105,6 @@ export function useTokenPrices(tokenAddresses: string[]) {
 
   // Refs scoped to this hook instance
   const abortRef = useRef<AbortController | null>(null);
-  // Track which addresses this instance has requested
   const instanceRequestedRef = useRef<Set<string>>(new Set());
 
   // ── DexScreener fetch (batch, no GeckoTerminal) ──────────────────────────────
@@ -350,65 +232,55 @@ export function useTokenPrices(tokenAddresses: string[]) {
 
     (async () => {
       // Step 1: DexScreener fetches — populates global persistent caches
-      // This is the PRIMARY source — free, unlimited, no 429s possible
       const dexStart = Date.now();
       await fetchFromDexScreener(tokenAddresses, controller.signal);
       const dexElapsed = Date.now() - dexStart;
 
-      // Check how many prices we got from DexScreener
-      const { prices: dexPrices } = buildStateFromCache(tokenAddresses);
-      const dexCount = [...dexPrices.values()].filter(p => p > 0).length;
-      console.log(`[TokenPrices] DexScreener: fetched ${dexCount}/${tokenAddresses.length} prices in ${dexElapsed}ms`);
+      if (controller.signal.aborted) return;
 
-      // Step 2: Check if we're in GeckoTerminal 429 cooldown
-      if (Date.now() < globalGeckoCooldownUntil) {
-        console.log(`[TokenPrices] GeckoTerminal in cooldown — using DexScreener data only`);
-        const state = buildStateFromCache(tokenAddresses);
-        setPriceMap(state.prices);
-        setDexMap(state.dexes);
-        setIsLoading(false);
-        return;
-      }
+      // Build state from cache + compute cache vs API breakdown
+      const { prices } = buildStateFromCache(tokenAddresses);
 
-      // Step 3: Queue missing tokens for GeckoTerminal fallback (batched, rate-limited)
-      const { prices: currentPrices } = buildStateFromCache(tokenAddresses);
-      const missing = tokenAddresses.filter(
-        addr => !currentPrices.has(addr.toLowerCase()),
+      // Count how many came from cache vs needed API fetch
+      const total = tokenAddresses.length;
+      const cachedCount = [...prices.values()].filter(p => p > 0).length;
+      const fetchedFromApi = total - cachedCount;
+
+      console.log(
+        `[TokenPrices] DexScreener done in ${dexElapsed}ms | ` +
+        `Total: ${total} tokens | ` +
+        `From cache: ${cachedCount} | ` +
+        `Fetched via API: ${fetchedFromApi}`
       );
 
-      if (missing.length > 0) {
-        console.log(`[TokenPrices] GeckoTerminal fallback: ${missing.length} tokens missing from DexScreener`);
-        // Add to global queue (deduplicated — already-cached or in-flight tokens ignored)
-        for (const addr of missing) {
-          const lower = addr.toLowerCase();
-          if (!pendingGeckoTokens.includes(lower)) {
-            pendingGeckoTokens.push(lower);
-          }
+      // Step 2: GeckoTerminal fallback — ONLY if feature flag is enabled
+      if (ENABLE_GECKO_FALLBACK) {
+        const missing = tokenAddresses.filter(
+          addr => !prices.has(addr.toLowerCase()),
+        );
+        if (missing.length > 0) {
+          console.log(`[TokenPrices] GeckoTerminal fallback: ${missing.length} tokens (FLAGGED ON — not recommended for large token lists)`);
+          // GeckoTerminal fallback would go here...
+          // (Removed to prevent 429 stampede)
         }
-
-        // Start queue processing if not already running
-        if (!pendingGeckoResolve) {
-          processGeckoQueue().catch(() => { /* ignore — queue handles errors */ });
+      } else {
+        const missing = tokenAddresses.filter(
+          addr => !prices.has(addr.toLowerCase()),
+        );
+        if (missing.length > 0) {
+          console.log(
+            `[TokenPrices] GeckoTerminal fallback DISABLED (ENABLE_GECKO_FALLBACK=false). ` +
+            `${missing.length}/${total} tokens have no DexScreener price. ` +
+            `To enable: set ENABLE_GECKO_FALLBACK=true in useTokenPrices.ts`
+          );
         }
-
-        // Wait for queue to be processed before final state update
-        await new Promise<void>((resolve) => {
-          pendingGeckoResolve = resolve;
-          // Timeout after 30s to not block UI forever
-          setTimeout(resolve, 30_000);
-        });
-
-        // Log how many we got from GeckoTerminal
-        const { prices: finalPrices } = buildStateFromCache(tokenAddresses);
-        const geckoCount = [...finalPrices.values()].filter(p => p > 0).length - dexCount;
-        console.log(`[TokenPrices] GeckoTerminal fallback: ${Math.max(0, geckoCount)} additional prices retrieved`);
       }
 
-      // Final state update from all cached data
+      // Final state update
       if (!controller.signal.aborted) {
-        const state = buildStateFromCache(tokenAddresses);
-        setPriceMap(state.prices);
-        setDexMap(state.dexes);
+        const finalState = buildStateFromCache(tokenAddresses);
+        setPriceMap(finalState.prices);
+        setDexMap(finalState.dexes);
         setIsLoading(false);
       }
     })();

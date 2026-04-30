@@ -8,7 +8,14 @@ const GECKO_BASE = import.meta.env.PROD
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens';
 const STATS_STALE_MS = 60_000; // 1 min — DexScreener has no rate limits
 const DEX_ORDERS_STALE_MS = 60_000; // 1 min for DexScreener orders (free/unlimited)
-const GECKO_TRADES_STALE_MS = 900_000; // 15 min for GeckoTerminal trades (fallback)
+
+// AGGRESSIVE RATE LIMIT FIX (2026-04-30):
+// GeckoTerminal trades — reduced from 15min refresh to 5min, disabled on page load.
+// Only refreshes manually or when user explicitly requests trades data.
+// Prevents 429s from polling GeckoTerminal too frequently.
+const GECKO_TRADES_STALE_MS = 5 * 60_000;    // 5 min (was 15 min)
+const GECKO_TRADES_REFETCH_INTERVAL = false;  // DISABLE automatic refresh on page load
+
 const TRADES_PAGE_SIZE = 10;
 
 // ── DexScreener-first Strategy ─────────────────────────────────────────────────
@@ -18,11 +25,6 @@ const TRADES_PAGE_SIZE = 10;
 //
 // This eliminates 429 errors for trades because DexScreener covers >99% of cases.
 // GeckoTerminal is only called as fallback for edge cases.
-
-// ── GeckoTerminal Rate Limiting (fallback only) ────────────────────────────────
-//
-// Global request queue + circuit breaker for when fallback IS needed.
-// Shared across all callers to avoid duplicate concurrent requests causing 429s.
 
 const GECKO_TRADES_DELAY_MS = 2000;       // 2s between requests
 const GECKO_TRADES_COOLDOWN_MS = 30_000;  // 30s after 429
@@ -110,7 +112,7 @@ function queueTradesRequest(poolAddr: string): Promise<Trade[]> {
   });
 }
 
-// ── DexScreener Orders (primary trades source — free/unlimited) ────────────────
+// ── DexScreener Orders (primary trades source — free/unlimited) ──────────────
 
 interface DexOrder {
   id: string;
@@ -157,12 +159,12 @@ const mapTrade = (t: { attributes: Record<string, string | number> }): Trade => 
   volume_in_usd: String(t.attributes.volume_in_usd || '0'),
   tx_hash: String(t.attributes.tx_hash || ''),
   block_timestamp: String(t.attributes.block_timestamp || ''),
-  from_token_amount: String(t.attributes.from_token_amount || '0'),
-  to_token_amount: String(t.attributes.to_token_amount || '0'),
+  from_token_amount: String(t.attributes.from_token_amount || ''),
+  to_token_amount: String(t.attributes.to_token_amount || ''),
   from_token_address: String(t.attributes.from_token_address || ''),
   to_token_address: String(t.attributes.to_token_address || ''),
-  price_from_in_usd: String(t.attributes.price_from_in_usd || '0'),
-  price_to_in_usd: String(t.attributes.price_to_in_usd || '0'),
+  price_from_in_usd: String(t.attributes.price_from_in_usd || ''),
+  price_to_in_usd: String(t.attributes.price_to_in_usd || ''),
   ...t.attributes,
 });
 
@@ -245,6 +247,7 @@ export function useOmnomData() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // DexScreener orders query — PRIMARY source (no rate limits)
+  // Throttled to 60s minimum between refetches
   const dexOrdersQuery = useQuery({
     queryKey: ['omnomDexOrders'],
     queryFn: async (): Promise<Trade[]> => {
@@ -264,11 +267,13 @@ export function useOmnomData() {
       }
     },
     staleTime: DEX_ORDERS_STALE_MS,
-    refetchInterval: DEX_ORDERS_STALE_MS,
+    refetchInterval: DEX_ORDERS_STALE_MS, // 60s — DexScreener has no rate limits
   });
 
   // GeckoTerminal trades — FALLBACK only (rate-limited)
-  // Only enabled when DexScreener returns no orders
+  // DISABLED automatic refresh on page load (refetchInterval = false)
+  // User must manually trigger a refresh or rely on manual refresh actions.
+  // Only enabled when DexScreener returns no orders.
   const geckoTradesQuery = useQuery({
     queryKey: ['omnomGeckoTrades'],
     queryFn: async (): Promise<Trade[]> => {
@@ -277,7 +282,7 @@ export function useOmnomData() {
     },
     ...baseOpts,
     staleTime: GECKO_TRADES_STALE_MS,
-    refetchInterval: GECKO_TRADES_STALE_MS,
+    refetchInterval: GECKO_TRADES_REFETCH_INTERVAL, // DISABLED — was 15min, caused 429s
     enabled: (dexOrdersQuery.data?.length ?? 0) === 0 && !dexOrdersQuery.isLoading,
   });
 
@@ -316,7 +321,7 @@ export function useOmnomData() {
       return poolOrders;
     },
     staleTime: DEX_ORDERS_STALE_MS,
-    refetchInterval: false,
+    refetchInterval: false, // No automatic refresh — manual only
     enabled: pairs.length > 0,
   });
 
@@ -346,7 +351,7 @@ export function useOmnomData() {
         }
       } catch { /* fall through to GeckoTerminal */ }
 
-      // Fallback to GeckoTerminal
+      // Fallback to GeckoTerminal — only if DexScreener was empty/not found
       const trades = await queueTradesRequest(OMNOM_WWDOGE_POOL);
       if (trades.length > 0) {
         console.log(`[loadMoreTrades] GeckoTerminal fallback returned ${trades.length} trades`);

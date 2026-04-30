@@ -84,7 +84,7 @@ interface GeckoTrade {
   id: string;
   attributes: {
     block_number: number;
-    transaction_hash: string;
+    tx_hash: string;
     tx_from_address: string;
     from_token_amount: string;
     to_token_amount: string;
@@ -121,7 +121,7 @@ function mapGeckoTradeToTrade(geckoTrade: GeckoTrade, _poolAddress: string): Tra
     kind: isBuy ? 'buy' : 'sell',
     tx_from_address: attrs.tx_from_address || '',
     volume_in_usd: String(attrs.volume_in_usd || '0'),
-    tx_hash: attrs.transaction_hash || '',
+    tx_hash: attrs.tx_hash || '',
     block_timestamp: attrs.block_timestamp || '',
     from_token_amount: fromTokenAmount,
     to_token_amount: toTokenAmount,

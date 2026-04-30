@@ -98,7 +98,8 @@ export function useRoute(
 
     try {
       const client = wagmiPublicClient ?? undefined;
-      const allPools = await fetchPoolsForSwap(tokenInAddress, tokenOutAddress, client);
+      // ─── Primary Route Fetch (using registered routers) ───────────────────────
+      let allPools = await fetchPoolsForSwap(tokenInAddress, tokenOutAddress, client);
 
       if (seq !== seqRef.current) return; // stale
       setPools(allPools);
@@ -113,6 +114,49 @@ export function useRoute(
         allPools,
         feeBps,
       );
+
+      // ─── Fallback: Extreme Price Impact or Single DEX Detection ─────────────
+      // If primary route has extreme price impact (>10%) or only returns 1 DEX,
+      // fetch additional pools from ALL_DEX_LIST directly to find better routes.
+      // This handles cases where registeredRoutersCache is stale/incomplete.
+      const primaryHasExtremeImpact = routes.length > 0 && routes[0].priceImpact > 0.10;
+      const uniqueDexCount = routes.length > 0
+        ? new Set(routes.flatMap(r => r.steps.map(s => s.dexName))).size
+        : 0;
+      const shouldFallback = primaryHasExtremeImpact || (routes.length > 0 && uniqueDexCount === 1 && allPools.length < 5);
+
+      if (shouldFallback && client) {
+        console.warn(`[useRoute] Fallback triggered: extremeImpact=${primaryHasExtremeImpact}, uniqueDex=${uniqueDexCount}, poolCount=${allPools.length}`);
+
+        // Fetch from all known DEXs (bypassing registered router filter)
+        const { fallbackGetPairs } = await import('../../services/pathFinder/poolFetcher');
+        const fallbackPools = await fallbackGetPairs(tokenInAddress, tokenOutAddress, client, true); // true = useAllDex
+
+        if (fallbackPools.length > allPools.length) {
+          console.log(`[useRoute] Fallback found ${fallbackPools.length} pools vs ${allPools.length} from registered routers`);
+
+          // Merge and deduplicate pools
+          const existingKeys = new Set(allPools.map(p => `${p.factory}:${p.token0}:${p.token1}`));
+          const newPools = fallbackPools.filter(p => {
+            const key = `${p.factory}:${p.token0}:${p.token1}`;
+            return !existingKeys.has(key);
+          });
+
+          allPools = [...allPools, ...newPools];
+          setPools(allPools);
+
+          // Recompute routes with full pool set
+          routes = findAllViableRoutes(
+            tokenInAddress,
+            tokenOutAddress,
+            amountInWei,
+            allPools,
+            feeBps,
+          );
+
+          console.log(`[useRoute] After fallback: ${routes.length} routes found, best priceImpact=${routes[0]?.priceImpact}`);
+        }
+      }
 
       if (seq !== seqRef.current) return;
       setAllRoutes(routes);

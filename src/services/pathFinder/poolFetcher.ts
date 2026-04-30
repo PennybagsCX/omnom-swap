@@ -198,15 +198,33 @@ export async function fetchPoolReserves(
  *
  * This is slower than API-based discovery but more reliable since it
  * queries the blockchain directly.
+ *
+ * @param tokenA - First token address
+ * @param tokenB - Second token address
+ * @param client - Public client for RPC calls
+ * @param useAllDex - If true, queries ALL_DEX_LIST regardless of on-chain router registration.
+ *                    Use this when the registered router cache is incomplete/stale.
  */
 export async function fallbackGetPairs(
   tokenA: string,
   tokenB: string,
   client: PublicClient = defaultClient,
+  useAllDex: boolean = false,
 ): Promise<PoolReserves[]> {
-  console.warn('[PoolFetcher] Using on-chain fallback for pool discovery:', tokenA, '->', tokenB);
-  await getRegisteredRouters(client);
-  const dexList = getDexList();
+  console.warn('[PoolFetcher] Using on-chain fallback for pool discovery:', tokenA, '->', tokenB, { useAllDex });
+
+  // Determine which DEX list to use
+  let dexList: DexInfo[];
+  if (useAllDex) {
+    // Bypass registered router filter — use ALL_DEX_LIST for comprehensive pool discovery
+    dexList = ALL_DEX_LIST;
+    console.log('[PoolFetcher] fallbackGetPairs: using ALL_DEX_LIST (', ALL_DEX_LIST.length, ' DEXs)');
+  } else {
+    // Standard behavior: only query routers registered on-chain
+    await getRegisteredRouters(client);
+    dexList = getDexList();
+  }
+
   const pools: PoolReserves[] = [];
 
   const promises = dexList.map(async (dex) => {
@@ -224,6 +242,7 @@ export async function fallbackGetPairs(
     if (r.status === 'fulfilled' && r.value) pools.push(r.value);
   }
 
+  console.log('[PoolFetcher] fallbackGetPairs: found', pools.length, 'pools across', dexList.length, 'DEXes');
   return pools;
 }
 
@@ -329,14 +348,27 @@ export async function fetchPoolsForPair(
  *
  * Total calls ≈ DEX_COUNT × (1 + 2×HUBS + HUBS×(HUBS-1)/2)
  * With 7 DEXes and 3 hubs: 7 × (1 + 6 + 3) = 70 calls — vs ~875k for brute force.
+ *
+ * @param useAllDex - If true, queries ALL_DEX_LIST regardless of on-chain router registration.
+ *                   Use this for fallback when primary route has extreme price impact.
  */
 export async function fetchPoolsForSwap(
   tokenIn: string,
   tokenOut: string,
   client: PublicClient = defaultClient,
+  useAllDex: boolean = false,
 ): Promise<PoolReserves[]> {
-  await getRegisteredRouters(client);
-  const dexList = getDexList();
+  // Determine which DEX list to use
+  let dexList: DexInfo[];
+  if (useAllDex) {
+    // Bypass registered router filter — use ALL_DEX_LIST for comprehensive pool discovery
+    dexList = ALL_DEX_LIST;
+    console.log('[fetchPoolsForSwap] Using ALL_DEX_LIST (', ALL_DEX_LIST.length, ' DEXs) for fallback');
+  } else {
+    await getRegisteredRouters(client);
+    dexList = getDexList();
+  }
+
   const pools: PoolReserves[] = [];
   const seen = new Set<string>();
 

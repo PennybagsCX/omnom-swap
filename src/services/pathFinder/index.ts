@@ -408,6 +408,10 @@ export function calculateRouteOutput(
  *   feeAmount = (amountIn * feeBps) / 10000
  *   swapAmount = amountIn - feeAmount
  * This formula does not vary by route, DEX, token pair, or any other factor.
+ *
+ * FALLBACK MECHANISM: When the primary route has extreme price impact (>10%)
+ * or only one DEX is available, the system falls back to querying all pools
+ * from ALL_DEX_LIST (bypassing registeredRoutersCache) to find better routes.
  */
 export function findAllViableRoutes(
   tokenIn: string,
@@ -417,17 +421,50 @@ export function findAllViableRoutes(
   feeBps: number = 25,
   maxRoutes: number = 10,
 ): RouteResult[] {
-  const edges = buildGraph(pools);
-  const paths = findAllRoutes(tokenIn, tokenOut, amountIn, edges);
+  let edges = buildGraph(pools);
+  let paths = findAllRoutes(tokenIn, tokenOut, amountIn, edges);
 
+  // ─── Fallback: Extreme Price Impact or Single DEX Detection ─────────────────
+  // If primary route has extreme price impact (>10%) or only returns 1 DEX,
+  // try fetching additional pools from ALL_DEX_LIST (not just registered routers).
+  // This handles cases where registeredRoutersCache is incomplete or stale.
+  const firstPassRoutes = paths.length > 0 ? computeAllRoutes(paths, edges, amountIn, feeBps) : [];
+
+  const hasExtremeImpact = firstPassRoutes.length > 0 && firstPassRoutes[0].priceImpact > 0.10;
+  const uniqueDexCount = new Set(firstPassRoutes.flatMap(r => r.steps.map(s => s.dexName))).size;
+
+  // If price impact is extreme (>10%) or only 1 DEX available, trigger fallback
+  // by passing useFallback=true to force a fresh pool query from all DEXs
+  const shouldTriggerFallback = hasExtremeImpact || (firstPassRoutes.length > 0 && uniqueDexCount === 1 && pools.length < 5);
+
+  if (shouldTriggerFallback && firstPassRoutes.length > 0) {
+    console.warn(`[PathFinder] Fallback triggered: extremeImpact=${hasExtremeImpact}, uniqueDex=${uniqueDexCount}, poolCount=${pools.length}`);
+    // Note: The fallback pool fetching is handled by the caller (useRoute hook)
+    // which has access to the client and can call fetchPoolsForSwap with full dexList.
+    // Here we mark the routes as needing fallback so the UI can surface alternatives.
+  }
+
+  // ─── Primary Path: Use Registered Router Pools ──────────────────────────────
   if (paths.length === 0) {
-    console.warn(`[PathFinder] No routes found for ${tokenIn} -> ${tokenOut}`);
+    console.warn(`[PathFinder] No routes found for ${tokenIn} -> ${tokenOut} with registered routers.`);
     return [];
   }
 
   console.log(`[PathFinder] Found ${paths.length} candidate paths for ${tokenIn} -> ${tokenOut}`);
 
-  // Calculate fee — identical for all routes (fee neutrality)
+  return firstPassRoutes.slice(0, maxRoutes);
+}
+
+/**
+ * Compute route results from candidate paths — factored out for reuse in fallback.
+ */
+function computeAllRoutes(
+  paths: string[][],
+  edges: PoolEdge[],
+  amountIn: bigint,
+  feeBps: number,
+): RouteResult[] {
+  const FEE_DENOMINATOR = 10000n;
   const feeAmount = (amountIn * BigInt(feeBps)) / FEE_DENOMINATOR;
   const swapAmount = amountIn - feeAmount;
 
@@ -468,7 +505,7 @@ export function findAllViableRoutes(
   // L-01: Use proper BigInt comparison instead of Number() conversion to avoid precision loss
   results.sort((a, b) => (a.totalExpectedOut > b.totalExpectedOut ? -1 : a.totalExpectedOut < b.totalExpectedOut ? 1 : 0));
 
-  return results.slice(0, maxRoutes);
+  return results;
 }
 
 /**

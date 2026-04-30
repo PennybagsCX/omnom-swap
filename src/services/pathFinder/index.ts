@@ -421,8 +421,8 @@ export function findAllViableRoutes(
   feeBps: number = 25,
   maxRoutes: number = 10,
 ): RouteResult[] {
-  let edges = buildGraph(pools);
-  let paths = findAllRoutes(tokenIn, tokenOut, amountIn, edges);
+  const edges = buildGraph(pools);
+  const paths = findAllRoutes(tokenIn, tokenOut, amountIn, edges);
 
   // ─── Fallback: Extreme Price Impact or Single DEX Detection ─────────────────
   // If primary route has extreme price impact (>10%) or only returns 1 DEX,

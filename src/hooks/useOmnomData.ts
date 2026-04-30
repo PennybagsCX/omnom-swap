@@ -88,14 +88,22 @@ const persistentGeckoCache = loadPersistGeckoCache();
 
 interface GeckoTrade {
   type: string;
+  id: string;
   attributes: {
+    block_number: number;
     transaction_hash: string;
-    timestamp: string;
-    amount_0: string;
-    amount_1: string;
-    side: string;
-    fee_amount: string;
-    fee_token: string;
+    tx_from_address: string;
+    from_token_amount: string;
+    to_token_amount: string;
+    price_from_in_currency_token: string;
+    price_to_in_currency_token: string;
+    price_from_in_usd: string;
+    price_to_in_usd: string;
+    block_timestamp: string;
+    kind: string;
+    volume_in_usd: string;
+    from_token_address: string;
+    to_token_address: string;
   };
 }
 
@@ -112,22 +120,22 @@ interface GeckoTradesResponse {
 
 function mapGeckoTradeToTrade(geckoTrade: GeckoTrade, _poolAddress: string): Trade {
   const attrs = geckoTrade.attributes;
-  const isBuy = (attrs.side || '').toLowerCase() === 'buy';
-  const fromTokenAmount = attrs.amount_0 || '0';
-  const toTokenAmount = attrs.amount_1 || '0';
+  const isBuy = (attrs.kind || '').toLowerCase() === 'buy';
+  const fromTokenAmount = attrs.from_token_amount || '0';
+  const toTokenAmount = attrs.to_token_amount || '0';
   
   return {
     kind: isBuy ? 'buy' : 'sell',
-    tx_from_address: '', // GeckoTerminal doesn't expose maker address
-    volume_in_usd: '0', // GeckoTerminal trades don't have USD amounts directly
+    tx_from_address: attrs.tx_from_address || '',
+    volume_in_usd: String(attrs.volume_in_usd || '0'),
     tx_hash: attrs.transaction_hash || '',
-    block_timestamp: attrs.timestamp || '',
+    block_timestamp: attrs.block_timestamp || '',
     from_token_amount: fromTokenAmount,
     to_token_amount: toTokenAmount,
-    from_token_address: '', // Would need pool data to resolve
-    to_token_address: '',
-    price_from_in_usd: '0',
-    price_to_in_usd: '0',
+    from_token_address: attrs.from_token_address || '',
+    to_token_address: attrs.to_token_address || '',
+    price_from_in_usd: String(attrs.price_from_in_usd || '0'),
+    price_to_in_usd: String(attrs.price_to_in_usd || '0'),
   };
 }
 

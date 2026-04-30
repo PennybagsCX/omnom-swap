@@ -266,6 +266,42 @@ export function useSwap() {
     (route: RouteResult, slippageBps: number, deadlineMinutes: number): SwapRequest => {
       if (!address) throw new Error('Wallet not connected');
 
+      // ── Deadline Validation & Debug ─────────────────────────────────────────
+      const currentTimeSeconds = Math.floor(Date.now() / 1000);
+      
+      // Ensure deadlineMinutes is a valid number (catch NaN/undefined)
+      const validatedDeadlineMinutes = Number(deadlineMinutes);
+      if (!Number.isFinite(validatedDeadlineMinutes) || validatedDeadlineMinutes <= 0) {
+        console.error('[useSwap] Invalid deadlineMinutes:', deadlineMinutes, '— using default 5');
+      }
+      const safeDeadlineMinutes = Number.isFinite(validatedDeadlineMinutes) && validatedDeadlineMinutes > 0 
+        ? validatedDeadlineMinutes 
+        : 5;
+
+      // Dynamic deadline: user setting + per-hop buffer (no artificial minimum)
+      const userDeadlineSeconds = safeDeadlineMinutes * 60;
+      const hopCount = route.steps.length;
+      const extraPerHop = Math.max(0, hopCount - 1) * EXTRA_SECONDS_PER_HOP;
+      const effectiveDeadlineSeconds = userDeadlineSeconds + extraPerHop;
+      const deadline = BigInt(currentTimeSeconds + effectiveDeadlineSeconds);
+
+      // Validate deadline is within acceptable range before sending to contract
+      const minAcceptableDeadline = BigInt(currentTimeSeconds + 60); // At least 60 seconds
+      const maxAcceptableDeadline = BigInt(currentTimeSeconds + 7200); // At most 2 hours
+      if (deadline < minAcceptableDeadline || deadline > maxAcceptableDeadline) {
+        console.error('[useSwap] Deadline out of range:', {
+          deadline: deadline.toString(),
+          deadlineHex: '0x' + deadline.toString(16),
+          minAcceptable: minAcceptableDeadline.toString(),
+          maxAcceptable: maxAcceptableDeadline.toString(),
+          currentTime: currentTimeSeconds,
+          effectiveDeadlineSeconds,
+          safeDeadlineMinutes,
+          hopCount,
+          extraPerHop,
+        });
+      }
+
       // DEBUG: Log buildSwapRequest inputs
       console.debug(`[useSwap] buildSwapRequest:`, {
         routeId: route.id,
@@ -273,17 +309,13 @@ export function useSwap() {
         totalExpectedOutFormatted: Number(route.totalExpectedOut) / 1e18,
         totalAmountIn: route.totalAmountIn.toString(),
         slippageBps,
-        deadlineMinutes,
+        deadlineMinutes: safeDeadlineMinutes,
+        deadlineRaw: deadlineMinutes,
+        deadline: deadline.toString(),
+        deadlineHex: '0x' + deadline.toString(16),
         feeBps: route.feeBps,
         stepsCount: route.steps.length,
       });
-
-      // Dynamic deadline: user setting + per-hop buffer (no artificial minimum)
-      const userDeadlineSeconds = deadlineMinutes * 60;
-      const hopCount = route.steps.length;
-      const extraPerHop = Math.max(0, hopCount - 1) * EXTRA_SECONDS_PER_HOP;
-      const effectiveDeadlineSeconds = userDeadlineSeconds + extraPerHop;
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + effectiveDeadlineSeconds);
 
       // Apply slippage to total expected output — this is the final safety check
       const slippageMultiplier = 10000n - BigInt(slippageBps);
@@ -596,6 +628,15 @@ export function useSwap() {
             setIsPending(false);
             setIsConfirming(true);
 
+            // DEBUG: Log deadline immediately before contract call
+            console.debug(`[useSwap] Submitting swap with deadline:`, {
+              deadline: request.deadline.toString(),
+              deadlineHex: '0x' + request.deadline.toString(16),
+              currentTimeSeconds,
+              isNativeDogeSwap,
+              routeId: route.id,
+            });
+
             const hash = await writeContractAsync({
               address: OMNOMSWAP_AGGREGATOR_ADDRESS,
               abi: OMNOMSWAP_AGGREGATOR_ABI,
@@ -654,6 +695,14 @@ export function useSwap() {
           // Step 3: Execute swap
           setIsPending(false);
           setIsConfirming(true);
+
+          // DEBUG: Log deadline immediately before contract call
+          console.debug(`[useSwap] Submitting ERC20 swap with deadline:`, {
+            deadline: request.deadline.toString(),
+            deadlineHex: '0x' + request.deadline.toString(16),
+            currentTimeSeconds,
+            routeId: route.id,
+          });
 
           const hash = await writeContractAsync({
             address: OMNOMSWAP_AGGREGATOR_ADDRESS,

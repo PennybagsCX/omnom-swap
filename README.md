@@ -1,20 +1,65 @@
 # OmnomSwap - DEX Aggregator on Dogechain
 
-OmnomSwap is a multi-DEX aggregator that scans all active UniswapV2-fork DEXes on Dogechain to find the optimal swap price. It combines an on-chain aggregator contract, an off-chain pathfinder, and a React frontend into a single integrated system.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/ci.yml/badge.svg)](https://github.com/OMNOM-SWAP/omnom-swap/actions)
+[![Dogechain](https://img.shields.io/badge/Network-Dogechain-87V第一名?style=flat-square&logo=coindesk)](https://dogechain.dog)
 
-## Deployment
+OmnomSwap is a multi-DEX aggregator that scans all active UniswapV2-fork DEXes on [Dogechain](https://dogechain.dog) to find the optimal swap price. It combines an on-chain aggregator contract, an off-chain pathfinder, and a React frontend into a single integrated system.
 
-This project auto-deploys to Vercel on every push to the `main` branch. The production deployment is available at the Vercel project linked to this repository.
+**Live Demo:** [https://omnomswap.com](https://omnomswap.com) (or use the Vercel deployment linked to this repository)
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Smart Contract](#smart-contract)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Frontend Development](#frontend-development)
+- [Project Structure](#project-structure)
+- [Security](#security)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/OMNOM-SWAP/omnom-swap.git
+cd omnom-swap
+
+# Install frontend dependencies
+npm install
+
+# Start development server (runs on http://localhost:3000)
+npm run dev
+
+# Run smart contract tests (requires Foundry)
+forge install
+forge test -vvv
+```
+
+**Prerequisites:**
+- [Foundry](https://foundry.paradigm.xyz/) for smart contract development
+- Node.js 18+ for the frontend
+- A wallet with DOGE on Dogechain for gas
+
+---
 
 ## Architecture
 
 OmnomSwap has three layers:
 
-1. **On-chain Aggregator Contract** (`contracts/OmnomSwapAggregator.sol`) - Receives pre-computed routes from the off-chain pathfinder and atomically executes multi-DEX, multi-hop swaps with protocol fee deduction and slippage protection.
+### 1. On-chain Aggregator Contract ([`contracts/OmnomSwapAggregator.sol`](contracts/OmnomSwapAggregator.sol))
+Receives pre-computed routes from the off-chain pathfinder and atomically executes multi-DEX, multi-hop swaps with protocol fee deduction and slippage protection.
 
-2. **Off-chain Path Finder** (`src/services/pathFinder/`) - A TypeScript module that fetches pair reserves via RPC, builds a liquidity graph, and computes optimal routing using modified Dijkstra/Bellman-Ford algorithms.
+### 2. Off-chain Path Finder ([`src/services/pathFinder/`](src/services/pathFinder/))
+A TypeScript module that fetches pair reserves via RPC, builds a liquidity graph, and computes optimal routing using modified Dijkstra/Bellman-Ford algorithms.
 
-3. **Frontend Dashboard** (`src/`) - A React 19 UI that presents the swap interface, route visualization, price comparisons across DEXes, swap history, and treasury statistics.
+### 3. Frontend Dashboard ([`src/`](src/))
+A React 19 UI that presents the swap interface, route visualization, price comparisons across DEXes, swap history, and treasury statistics.
 
 ### Data Flow
 
@@ -32,13 +77,17 @@ User -> Frontend -> Path Finder -> Reserve Fetcher -> DEX Pools
                                                    User receives tokens
 ```
 
+---
+
 ## Smart Contract
 
 ### OmnomSwapAggregator
 
 The aggregator is an ownable, pausable contract that executes pre-computed swap routes across multiple DEXes. It does **not** perform on-chain pathfinding - all routing logic lives off-chain to save gas and maximize flexibility.
 
-**Key features:**
+**Deployed Address:** `0x88F81031b258A0Fb789AC8d3A8071533BFADeC14` (Dogechain, Chain ID 2000)
+
+**Key Features:**
 - Multi-hop, multi-DEX swap execution
 - Protocol fee deduction (configurable, max 5%)
 - Slippage protection (per-step and overall)
@@ -47,7 +96,7 @@ The aggregator is an ownable, pausable contract that executes pre-computed swap 
 - ERC20 token rescue for stuck funds
 - Reentrancy guard on swap execution
 
-**Contract functions:**
+**Contract Functions:**
 
 | Function | Access | Description |
 |---|---|---|
@@ -60,7 +109,7 @@ The aggregator is an ownable, pausable contract that executes pre-computed swap 
 | `unpause()` | Owner | Resume operations |
 | `rescueTokens(address, uint256)` | Owner | Recover stuck tokens |
 
-**Data structures:**
+**Data Structures:**
 
 ```solidity
 struct SwapStep {
@@ -90,7 +139,11 @@ Protocol fees are deducted from the input token before swap execution:
 3. Remaining `amountIn - fee` is used for the swap route
 4. Output tokens are sent directly to the user
 
-Default fee: **25 basis points (0.25%)**, configurable up to 500 bps (5%).
+**Default fee:** 25 basis points (0.25%), configurable up to 500 bps (5%)
+
+**Treasury Address:** `0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88`
+
+---
 
 ## Dogechain DEX Ecosystem
 
@@ -108,18 +161,24 @@ All DEXes use UniswapV2-compatible contracts. DogeSwap uses WDOGE-specific funct
 
 ### Supported Tokens
 
-| Token | Address |
-|---|---|
-| WWDOGE (Wrapped Doge) | `0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101` |
-| OMNOM (DogeEatDoge) | `0xe3fca919883950c5cd468156392a6477ff5d18de` |
-| DC (DogeChain Token) | `0x7B4328c127B85369D9f82ca0503B000D09CF9180` |
-| DINU (Doge Inu) | `0x8a764cf73438de795c98707b07034e577af54825` |
+The protocol supports **100,000+ tokens** on Dogechain. The full token list is maintained in [`src/data/dogechain-tokens.json`](src/data/dogechain-tokens.json).
+
+**Key Tokens:**
+
+| Token | Symbol | Address |
+|---|---|---|
+| Wrapped Doge | WWDOGE | `0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101` |
+| DogeEatDoge | OMNOM | `0xe3fca919883950c5cd468156392a6477ff5d18de` |
+| DogeChain Token | DC | `0x7B4328c127B85369D9f82ca0503B000D09CF9180` |
+| Doge Inu | DINU | `0x8a764cf73438de795c98707b07034e577af54825` |
+
+---
 
 ## Deployment
 
 ### Prerequisites
 
-- [Foundry](https://book.getfoundly.sh/) installed (`curl -L https://foundry.paradigm.xyz | bash`)
+- [Foundry](https://foundry.paradigm.xyz/) installed (`curl -L https://foundry.paradigm.xyz | bash`)
 - Node.js 18+
 - A wallet with DOGE on Dogechain for gas
 
@@ -176,11 +235,13 @@ forge verify-contract <AGGREGATOR_ADDRESS> \
     --watch
 ```
 
+---
+
 ## Testing
 
 ### Smart Contract Tests (Foundry)
 
-87 tests across 3 test suites covering all contract functionality:
+**149 tests across 6 test suites** covering all contract functionality:
 
 ```bash
 # Run all tests with verbose output
@@ -195,10 +256,29 @@ forge test --match-contract MultiHopRoutingTest -vvv
 forge test --gas-report
 ```
 
-**Test coverage:**
-- `OmnomSwapAggregator.t.sol` (49 tests) - Deployment, access control, router management, swap execution, pause/unpause, token rescue
-- `FeeDistribution.t.sol` (22 tests) - Fee calculations at various bps, treasury updates, edge cases
-- `MultiHopRouting.t.sol` (16 tests) - Multi-hop swaps, cross-DEX routing, split routing, slippage protection
+**Test Coverage:**
+
+| Test File | Tests | Coverage |
+|---|---|---|
+| `OmnomSwapAggregator.t.sol` | 49 | Deployment, access control, router management, swap execution |
+| `FeeDistribution.t.sol` | 22 | Fee calculations at various bps, treasury updates, edge cases |
+| `MultiHopRouting.t.sol` | 16 | Multi-hop swaps, cross-DEX routing, split routing, slippage |
+| `SwapResilience.t.sol` | Various | Extreme conditions, resilience testing |
+| `PathFinder.test.ts` | Various | Off-chain pathfinding logic |
+| `poolFetcher.test.ts` | Various | Pool data fetching |
+
+### Frontend Tests (Vitest + Playwright)
+
+```bash
+# Run unit tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run E2E tests (requires dev server)
+npx playwright test
+```
 
 ### Frontend Build
 
@@ -207,13 +287,15 @@ npm install
 npm run build
 ```
 
+---
+
 ## Frontend Development
 
 ```bash
 # Install dependencies
 npm install
 
-# Start dev server on http://localhost:5173
+# Start dev server on http://localhost:3000
 npm run dev
 
 # Type checking
@@ -223,7 +305,7 @@ npm run lint
 npm run build
 ```
 
-### Frontend Features
+### Features
 
 - **Swap Interface** - Token swapping with real-time price quotes across all DEXes
 - **Route Visualization** - Visual display of the optimal swap route
@@ -233,52 +315,92 @@ npm run build
 - **Swap History** - On-chain trade feed with pagination
 - **Treasury Dashboard** - Protocol fee collection statistics
 - **Testing Dashboard** - Contract integration testing UI
-- **Wallet Integration** - MetaMask and compatible wallets via wagmi/viem
+- **Wallet Integration** - MetaMask, Coinbase Wallet, Rabby, Trust Wallet, WalletConnect
+
+---
 
 ## Project Structure
 
 ```
-contracts/
-  OmnomSwapAggregator.sol       # Main aggregator contract
-  interfaces/                    # IERC20, IUniswapV2 Router/Pair/Factory
-  libraries/                     # ReentrancyGuard, SafeERC20
-  mocks/                         # Mock contracts for testing
-
-script/
-  Deploy.s.sol                   # Deployment script (deploy + register routers)
-  Setup.s.sol                    # Post-deployment configuration script
-
-test/
-  OmnomSwapAggregator.t.sol      # Core contract tests (49 tests)
-  FeeDistribution.t.sol          # Fee mechanism tests (22 tests)
-  MultiHopRouting.t.sol          # Multi-hop routing tests (16 tests)
-
-src/
-  components/
-    SwapScreen.tsx               # Main swap UI
-    PoolsScreen.tsx              # Liquidity pool management
-    StatsScreen.tsx              # Market statistics
-    aggregator/                  # Aggregator-specific components
-      AggregatorSwap.tsx         # Aggregator swap interface
-      PriceComparison.tsx        # Cross-DEX price comparison
-      RouteVisualization.tsx     # Swap route visualization
-      SwapHistory.tsx            # Transaction history
-      TreasuryDashboard.tsx      # Fee statistics
-  hooks/
-    useAggregator/               # Aggregator contract hooks
-    useLiquidity.ts              # Liquidity management
-    useOmnomData.ts              # Market data
-  lib/
-    constants.ts                 # Contract addresses, DEX config, ABIs
-    web3/                        # Web3 configuration
-  services/
-    pathFinder/                  # Off-chain optimal routing engine
-
-docs/plans/
-  architecture.md                # Full architecture document
+omnom-swap/
+├── contracts/
+│   ├── OmnomSwapAggregator.sol    # Main aggregator contract
+│   ├── interfaces/                 # IERC20, IUniswapV2 Router/Pair/Factory
+│   ├── libraries/                  # ReentrancyGuard, SafeERC20
+│   └── mocks/                      # Mock contracts for testing
+│
+├── script/
+│   ├── Deploy.s.sol                # Deployment script (deploy + register routers)
+│   └── Setup.s.sol                 # Post-deployment configuration script
+│
+├── test/
+│   ├── OmnomSwapAggregator.t.sol  # Core contract tests (49 tests)
+│   ├── FeeDistribution.t.sol       # Fee mechanism tests (22 tests)
+│   ├── MultiHopRouting.t.sol       # Multi-hop routing tests (16 tests)
+│   ├── SwapResilience.t.sol        # Resilience and edge case tests
+│   ├── *.test.ts                   # Frontend unit tests (Vitest)
+│   └── *.test.ts                   # E2E tests (Playwright)
+│
+├── src/
+│   ├── components/
+│   │   ├── SwapScreen.tsx          # Main swap UI
+│   │   ├── PoolsScreen.tsx         # Liquidity pool management
+│   │   ├── StatsScreen.tsx         # Market statistics
+│   │   ├── Header.tsx              # Navigation header
+│   │   ├── Footer.tsx              # Footer with links
+│   │   └── aggregator/             # Aggregator-specific components
+│   │       ├── AggregatorSwap.tsx  # Aggregator swap interface
+│   │       ├── PriceComparison.tsx # Cross-DEX price comparison
+│   │       ├── RouteVisualization.tsx
+│   │       ├── SwapHistory.tsx
+│   │       ├── TreasuryDashboard.tsx
+│   │       ├── TokenSelector.tsx
+│   │       └── TestingDashboard.tsx
+│   │
+│   ├── hooks/
+│   │   ├── useAggregator/          # Aggregator contract hooks
+│   │   │   ├── useAggregatorContract.ts
+│   │   │   ├── useRoute.ts
+│   │   │   ├── useSwap.ts
+│   │   │   └── useTokenBalances.ts
+│   │   ├── useLiquidity.ts         # Liquidity management
+│   │   ├── useOmnomData.ts         # Market data
+│   │   ├── useTokenPrices.ts       # Price fetching
+│   │   └── useNewPairMonitor.ts    # New pair detection
+│   │
+│   ├── services/
+│   │   └── pathFinder/             # Off-chain optimal routing engine
+│   │       ├── index.ts
+│   │       ├── poolFetcher.ts
+│   │       └── types.ts
+│   │
+│   ├── lib/
+│   │   ├── constants.ts            # Contract addresses, DEX config, ABIs
+│   │   ├── format.ts               # Number formatting utilities
+│   │   └── web3/                   # Web3 configuration
+│   │
+│   ├── data/
+│   │   └── dogechain-tokens.json   # 100,000+ token list
+│   │
+│   └── App.tsx                     # Main application component
+│
+├── docs/
+│   ├── FINAL_AUDIT.md              # Final audit report
+│   ├── SECURITY_AUDIT.md           # Security audit
+│   ├── MEV_PROTECTION_AUDIT.md     # MEV protection analysis
+│   ├── PRODUCTION_AUDIT.md         # Production readiness audit
+│   └── NEXT_STEPS.md              # Future improvements
+│
+└── public/
+    ├── tokens/                     # Token logos
+    └── wallets/                    # Wallet icons
 ```
 
-## Security Considerations
+---
+
+## Security
+
+### Security Considerations
 
 | Concern | Mitigation |
 |---|---|
@@ -291,17 +413,54 @@ docs/plans/
 | Emergency stop | Owner can pause/unpause all swaps |
 | Approval safety | Approvals reset to 0 after each swap step |
 
-## Network
+### Audits
+
+The project has undergone multiple security audits. See [`docs/`](docs/) for detailed reports:
+
+- [`FINAL_AUDIT.md`](docs/FINAL_AUDIT.md) - Final comprehensive audit
+- [`SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) - Security-focused review
+- [`MEV_PROTECTION_AUDIT.md`](docs/MEV_PROTECTION_AUDIT.md) - MEV protection analysis
+- [`PRODUCTION_AUDIT.md`](docs/PRODUCTION_AUDIT.md) - Production readiness review
+
+### Network
 
 The app targets **Dogechain** (Chain ID 2000, RPC: `https://rpc.dogechain.dog`). Make sure your wallet is connected to the Dogechain network.
 
+---
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please ensure tests pass and linting is clean before submitting PRs.
+
+---
+
 ## Tech Stack
 
-- **Smart Contracts:** Solidity 0.8.19, Foundry
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS
-- **Web3:** wagmi, viem
+- **Smart Contracts:** Solidity 0.8.19, [Foundry](https://book.getfoundry.sh/)
+- **Frontend:** React 19, TypeScript, [Vite](https://vitejs.dev/) 6, [Tailwind CSS](https://tailwindcss.com/) 4
+- **Web3:** [wagmi](https://wagmi.sh/), [viem](https://viem.sh/)
+- **Testing:** Foundry (smart contracts), [Vitest](https://vitest.dev/) (unit), [Playwright](https://playwright.dev/) (E2E)
 - **Data:** GeckoTerminal API
+
+---
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## Links
+
+- **Website:** [https://omnomswap.com](https://omnomswap.com)
+- **Dogechain Explorer:** [https://explorer.dogechain.dog](https://explorer.dogechain.dog)
+- **Contract:** `0x88F81031b258A0Fb789AC8d3A8071533BFADeC14`
+- **Treasury:** `0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88`

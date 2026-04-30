@@ -36,7 +36,6 @@ const PERSIST_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min localStorage (same as mem
 const DEXSCREENER_BATCH_SIZE = 20;
 const GECKO_BATCH_SIZE = 5;          // Process GeckoTerminal tokens in small batches
 const GECKO_DELAY_BETWEEN_BATCHES_MS = 2000; // 2s between batches (avoid 429 burst)
-const GECKO_COOLDOWN_MS = 5 * 60 * 1000; // 5 min cooldown after 429
 
 // ── Module-level global state (singleton — survives across hook instances) ────
 //
@@ -86,74 +85,115 @@ const globalFetchingSet = new Set<string>();
 
 // Circuit breaker: global cooldown after 429
 let globalGeckoCooldownUntil = 0;
+let globalGeckoCooldownReason = '';
+
+// Track queue processing state
+let isGeckoQueueProcessing = false;
+let lastGeckoBatchCompletedAt = 0;
 
 // Accumulator for pending GeckoTerminal requests
 let pendingGeckoTokens: string[] = [];
 let pendingGeckoResolve: ((val: void) => void) | null = null;
 
-// Process accumulated GeckoTerminal tokens in controlled batches
+// Enhanced processGeckoQueue with strict rate limiting
 async function processGeckoQueue(): Promise<void> {
-  while (pendingGeckoTokens.length > 0) {
-    if (Date.now() < globalGeckoCooldownUntil) {
-      // Still in cooldown — wait it out
-      await new Promise(resolve => setTimeout(resolve, globalGeckoCooldownUntil - Date.now()));
+  if (isGeckoQueueProcessing) return;
+  isGeckoQueueProcessing = true;
+
+  try {
+    while (pendingGeckoTokens.length > 0) {
+      // Check cooldown BEFORE starting new batch
+      if (Date.now() < globalGeckoCooldownUntil) {
+        const cooldownRemaining = globalGeckoCooldownUntil - Date.now();
+        console.log(`[GeckoQueue] In cooldown (${globalGeckoCooldownReason}), waiting ${Math.round(cooldownRemaining / 1000)}s`);
+        await new Promise(resolve => setTimeout(resolve, Math.min(cooldownRemaining, 5000)));
+        if (Date.now() < globalGeckoCooldownUntil) continue;
+      }
+
+      // Enforce strict 2s gap between batches
+      const timeSinceLastBatch = Date.now() - lastGeckoBatchCompletedAt;
+      if (lastGeckoBatchCompletedAt > 0 && timeSinceLastBatch < GECKO_DELAY_BETWEEN_BATCHES_MS) {
+        const waitTime = GECKO_DELAY_BETWEEN_BATCHES_MS - timeSinceLastBatch;
+        console.log(`[GeckoQueue] Enforcing ${waitTime}ms gap between batches`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+
+      const batch = pendingGeckoTokens.splice(0, GECKO_BATCH_SIZE);
+      if (batch.length === 0) break;
+
+      console.log(`[GeckoQueue] Processing batch of ${batch.length} tokens, ${pendingGeckoTokens.length} remaining`);
+
+      let had429ThisBatch = false;
+
+      // Fetch all tokens in the batch concurrently (small batch = manageable load)
+      await Promise.all(
+        batch.map(async (addr) => {
+          if (globalFetchingSet.has(addr)) return;
+          globalFetchingSet.add(addr);
+
+          try {
+            const url = `${GECKO_BASE}/networks/dogechain/tokens/${addr}/pools?limit=10`;
+            const res = await fetch(url);
+
+            if (res.status === 429) {
+              // Circuit breaker: 30s cooldown on 429
+              globalGeckoCooldownUntil = Date.now() + 30_000;
+              globalGeckoCooldownReason = '429 from token pools endpoint';
+              had429ThisBatch = true;
+              console.log(`[GeckoQueue] Got 429 for ${addr}, entering 30s cooldown`);
+              // Put token back in queue for retry after cooldown
+              pendingGeckoTokens.push(addr);
+              return;
+            }
+
+            if (!res.ok) return;
+
+            const json = await res.json();
+            const pools = json?.data;
+            if (!Array.isArray(pools) || pools.length === 0) return;
+
+            const attributes = pools[0]?.attributes;
+            let price: number | null = null;
+            if (attributes?.base_token_price_usd) {
+              price = parseFloat(attributes.base_token_price_usd);
+            } else if (attributes?.quote_token_price_usd) {
+              price = parseFloat(attributes.quote_token_price_usd);
+            }
+
+            if (price !== null && !isNaN(price) && price > 0) {
+              const entry = { price, timestamp: Date.now() };
+              globalPriceCache.set(addr, entry);
+            }
+          } catch {
+            // Network error — skip
+          } finally {
+            globalFetchingSet.delete(addr);
+          }
+        })
+      );
+
+      // Mark batch complete
+      lastGeckoBatchCompletedAt = Date.now();
+
+      // If we hit 429, pause longer before next batch
+      if (had429ThisBatch) {
+        console.log(`[GeckoQueue] 429 detected, waiting ${30_000}ms before continuing`);
+        await new Promise(resolve => setTimeout(resolve, 30_000));
+        // Clear the cooldown since we waited
+        globalGeckoCooldownUntil = Date.now();
+      }
+
+      // Delay between batches to avoid 429 (only if queue still has items)
+      if (pendingGeckoTokens.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, GECKO_DELAY_BETWEEN_BATCHES_MS));
+      }
     }
-
-    const batch = pendingGeckoTokens.splice(0, GECKO_BATCH_SIZE);
-    if (batch.length === 0) break;
-
-    // Fetch all tokens in the batch concurrently (small batch = manageable load)
-    await Promise.all(
-      batch.map(async (addr) => {
-        if (globalFetchingSet.has(addr)) return;
-        globalFetchingSet.add(addr);
-
-        try {
-          const url = `${GECKO_BASE}/networks/dogechain/tokens/${addr}/pools?limit=10`;
-          const res = await fetch(url);
-
-          if (res.status === 429) {
-            globalGeckoCooldownUntil = Date.now() + GECKO_COOLDOWN_MS;
-            // Put token back in queue for retry after cooldown
-            pendingGeckoTokens.push(addr);
-            return;
-          }
-
-          if (!res.ok) return;
-
-          const json = await res.json();
-          const pools = json?.data;
-          if (!Array.isArray(pools) || pools.length === 0) return;
-
-          const attributes = pools[0]?.attributes;
-          let price: number | null = null;
-          if (attributes?.base_token_price_usd) {
-            price = parseFloat(attributes.base_token_price_usd);
-          } else if (attributes?.quote_token_price_usd) {
-            price = parseFloat(attributes.quote_token_price_usd);
-          }
-
-          if (price !== null && !isNaN(price) && price > 0) {
-            const entry = { price, timestamp: Date.now() };
-            globalPriceCache.set(addr, entry);
-          }
-        } catch {
-          // Network error — skip
-        } finally {
-          globalFetchingSet.delete(addr);
-        }
-      })
-    );
-
-    // Delay between batches to avoid 429
-    if (pendingGeckoTokens.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, GECKO_DELAY_BETWEEN_BATCHES_MS));
+  } finally {
+    isGeckoQueueProcessing = false;
+    if (pendingGeckoResolve) {
+      pendingGeckoResolve();
+      pendingGeckoResolve = null;
     }
-  }
-
-  if (pendingGeckoResolve) {
-    pendingGeckoResolve();
-    pendingGeckoResolve = null;
   }
 }
 

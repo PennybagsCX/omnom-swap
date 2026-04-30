@@ -10,6 +10,111 @@ const STATS_STALE_MS = 60_000; // 1 min — DexScreener has no rate limits
 const TRADES_STALE_MS = 900_000; // 15 min for GeckoTerminal trades
 const TRADES_PAGE_SIZE = 10;
 
+// ── GeckoTerminal Rate Limiting ────────────────────────────────────────────────
+//
+// Global request queue + circuit breaker for trades endpoint.
+// Both useOmnomData and external callers share the same queue to avoid
+// duplicate concurrent requests causing 429s.
+
+const GECKO_TRADES_DELAY_MS = 2000;       // 2s between requests
+const GECKO_TRADES_COOLDOWN_MS = 30_000;  // 30s after 429
+
+interface TradesRequest {
+  poolAddr: string;
+  resolve: (trades: Trade[]) => void;
+  reject: (err: Error) => void;
+}
+
+let pendingTradesRequests: TradesRequest[] = [];
+let isTradesQueueProcessing = false;
+let lastTradesRequestAt = 0;
+let globalTradesCooldownUntil = 0;
+let globalTradesCooldownReason = '';
+
+async function processTradesQueue(): Promise<void> {
+  if (isTradesQueueProcessing) return;
+  isTradesQueueProcessing = true;
+
+  try {
+    while (pendingTradesRequests.length > 0) {
+      // Check cooldown before processing
+      if (Date.now() < globalTradesCooldownUntil) {
+        const remaining = globalTradesCooldownUntil - Date.now();
+        console.log(`[TradesQueue] In cooldown (${globalTradesCooldownReason}), waiting ${Math.round(remaining / 1000)}s`);
+        await new Promise(resolve => setTimeout(resolve, Math.min(remaining, 5000)));
+        if (Date.now() < globalTradesCooldownUntil) continue;
+      }
+
+      // Enforce delay between requests
+      const timeSinceLast = Date.now() - lastTradesRequestAt;
+      if (lastTradesRequestAt > 0 && timeSinceLast < GECKO_TRADES_DELAY_MS) {
+        const waitTime = GECKO_TRADES_DELAY_MS - timeSinceLast;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+
+      const request = pendingTradesRequests.shift();
+      if (!request) break;
+
+      lastTradesRequestAt = Date.now();
+
+      try {
+        const res = await fetch(`${GECKO_BASE}/networks/dogechain/pools/${request.poolAddr}/trades?page=1&limit=${TRADES_PAGE_SIZE}`);
+
+        if (res.status === 429) {
+          globalTradesCooldownUntil = Date.now() + GECKO_TRADES_COOLDOWN_MS;
+          globalTradesCooldownReason = '429 from trades endpoint';
+          console.log(`[TradesQueue] Got 429 for ${request.poolAddr}, entering ${GECKO_TRADES_COOLDOWN_MS}ms cooldown`);
+          // Put request back in queue
+          pendingTradesRequests.unshift(request);
+          // Wait cooldown before continuing
+          await new Promise(resolve => setTimeout(resolve, GECKO_TRADES_COOLDOWN_MS));
+          continue;
+        }
+
+        if (!res.ok) {
+          request.resolve([]);
+          continue;
+        }
+
+        const json = await res.json();
+        const trades: Trade[] = Array.isArray(json.data) ? json.data.map(mapTrade) : [];
+        request.resolve(trades);
+      } catch (err) {
+        request.reject(err as Error);
+      }
+
+      // Delay after each request
+      await new Promise(resolve => setTimeout(resolve, GECKO_TRADES_DELAY_MS));
+    }
+  } finally {
+    isTradesQueueProcessing = false;
+  }
+}
+
+function queueTradesRequest(poolAddr: string): Promise<Trade[]> {
+  return new Promise((resolve, reject) => {
+    pendingTradesRequests.push({ poolAddr, resolve, reject });
+    if (!isTradesQueueProcessing) {
+      processTradesQueue().catch(() => { /* ignore */ });
+    }
+  });
+}
+
+const mapTrade = (t: { attributes: Record<string, string | number> }): Trade => ({
+  kind: String(t.attributes.kind || ''),
+  tx_from_address: String(t.attributes.tx_from_address || ''),
+  volume_in_usd: String(t.attributes.volume_in_usd || '0'),
+  tx_hash: String(t.attributes.tx_hash || ''),
+  block_timestamp: String(t.attributes.block_timestamp || ''),
+  from_token_amount: String(t.attributes.from_token_amount || '0'),
+  to_token_amount: String(t.attributes.to_token_amount || '0'),
+  from_token_address: String(t.attributes.from_token_address || ''),
+  to_token_address: String(t.attributes.to_token_address || ''),
+  price_from_in_usd: String(t.attributes.price_from_in_usd || '0'),
+  price_to_in_usd: String(t.attributes.price_to_in_usd || '0'),
+  ...t.attributes,
+});
+
 export interface DexPair {
   pairAddress: string;
   dexId: string;
@@ -86,33 +191,13 @@ export function useOmnomData() {
   // ── Trades — GeckoTerminal (only remaining GeckoTerminal consumer) ──
 
   const [extraTrades, setExtraTrades] = useState<Trade[]>([]);
-  const [nextTradesPage, setNextTradesPage] = useState(2);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const mapTrade = useCallback((t: { attributes: Record<string, string | number> }): Trade => ({
-    kind: String(t.attributes.kind || ''),
-    tx_from_address: String(t.attributes.tx_from_address || ''),
-    volume_in_usd: String(t.attributes.volume_in_usd || '0'),
-    tx_hash: String(t.attributes.tx_hash || ''),
-    block_timestamp: String(t.attributes.block_timestamp || ''),
-    from_token_amount: String(t.attributes.from_token_amount || '0'),
-    to_token_amount: String(t.attributes.to_token_amount || '0'),
-    from_token_address: String(t.attributes.from_token_address || ''),
-    to_token_address: String(t.attributes.to_token_address || ''),
-    price_from_in_usd: String(t.attributes.price_from_in_usd || '0'),
-    price_to_in_usd: String(t.attributes.price_to_in_usd || '0'),
-    ...t.attributes,
-  }), []);
-
-  // Primary pool trades
+  // Primary pool trades — uses global queue to avoid 429
   const tradesQuery = useQuery({
     queryKey: ['omnomTrades'],
     queryFn: async (): Promise<Trade[]> => {
-      const res = await fetch(`${GECKO_BASE}/networks/dogechain/pools/${OMNOM_WWDOGE_POOL}/trades?page=1&limit=${TRADES_PAGE_SIZE}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!Array.isArray(json.data)) return [];
-      return json.data.map(mapTrade);
+      return queueTradesRequest(OMNOM_WWDOGE_POOL);
     },
     ...baseOpts,
     staleTime: TRADES_STALE_MS,
@@ -141,12 +226,8 @@ export function useOmnomData() {
         const poolAddr = pool.pairAddress;
         if (!poolAddr) continue;
         try {
-          const res = await fetch(`${GECKO_BASE}/networks/dogechain/pools/${poolAddr}/trades?page=1&limit=${TRADES_PAGE_SIZE}`);
-          if (res.status === 429) break;
-          if (!res.ok) continue;
-          const json = await res.json();
-          if (!Array.isArray(json.data)) continue;
-          poolTrades.push(...json.data.map(mapTrade));
+          const trades = await queueTradesRequest(poolAddr);
+          poolTrades.push(...trades);
         } catch { /* skip failed pool fetch */ }
       }
       return poolTrades;
@@ -164,17 +245,14 @@ export function useOmnomData() {
     if (!hasMoreTrades || isLoadingMore) return;
     setIsLoadingMore(true);
     try {
-      const res = await fetch(`${GECKO_BASE}/networks/dogechain/pools/${OMNOM_WWDOGE_POOL}/trades?page=${nextTradesPage}&limit=${TRADES_PAGE_SIZE}`);
-      if (!res.ok) return;
-      const json = await res.json();
-      if (!Array.isArray(json.data)) return;
-      const newTrades = json.data.map(mapTrade);
-      setExtraTrades(prev => [...prev, ...newTrades]);
-      setNextTradesPage(prev => prev + 1);
+      const trades = await queueTradesRequest(OMNOM_WWDOGE_POOL);
+      if (trades.length > 0) {
+        setExtraTrades(prev => [...prev, ...trades]);
+      }
     } finally {
       setIsLoadingMore(false);
     }
-  }, [hasMoreTrades, isLoadingMore, nextTradesPage, mapTrade]);
+  }, [hasMoreTrades, isLoadingMore]);
 
   const otherPoolTrades = activePoolTradesQuery.data ?? [];
   const seen = new Set<string>();

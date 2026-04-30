@@ -101,9 +101,11 @@ export async function getRegisteredRouters(client: PublicClient): Promise<Set<st
  * Get DEX list filtered to only routers registered on-chain.
  * Must call getRegisteredRouters() first to populate the cache.
  * Falls back to ALL_DEX_LIST if cache is not yet populated.
+ * Falls back to ALL_DEX_LIST if cache is empty (no routers registered yet).
  */
 export function getDexList(): DexInfo[] {
-  if (registeredDexCache) return registeredDexCache;
+  if (registeredDexCache && registeredDexCache.length > 0) return registeredDexCache;
+  console.warn('[PoolFetcher] getDexList: cache empty or not populated, falling back to ALL_DEX_LIST');
   return ALL_DEX_LIST;
 }
 

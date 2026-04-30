@@ -614,6 +614,9 @@ export function useSwap() {
             }
           }
 
+          // Capture current time for debug logging (used after buildSwapRequest)
+          const currentTimeSeconds = Math.floor(Date.now() / 1000);
+
           // Build swap request (includes dynamic deadline)
           const request = buildSwapRequest(route, slippageBps, deadlineMinutes);
 

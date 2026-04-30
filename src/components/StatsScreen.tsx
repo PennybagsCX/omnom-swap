@@ -125,8 +125,12 @@ export function StatsScreen() {
     isLoadingMoreTrades,
     loadMoreTrades,
     isLoading,
+    isGeckoLoading,
     mexcPrice, mexcVol24,
   } = useOmnomData();
+
+  // Show loading indicator when GeckoTerminal is retrying in background
+  const isRetryingGecko = isGeckoLoading && trades.length === 0;
 
   const txns24Total = totalTxns24 ? totalTxns24.buys + totalTxns24.sells : null;
   const [visibleCount, setVisibleCount] = useState(10);
@@ -325,6 +329,12 @@ export function StatsScreen() {
                     </div>
                   )}
                 </>
+              ) : isRetryingGecko ? (
+                <div className="text-center py-12 text-on-surface-variant">
+                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                  <p className="font-headline text-xs uppercase tracking-widest">Loading trades...</p>
+                  <p className="text-[10px] mt-1 opacity-60">Fetching from backup source (may retry on rate limit)</p>
+                </div>
               ) : (
                 <div className="text-center py-12 text-on-surface-variant">
                   <Hash className="w-10 h-10 mx-auto mb-3 opacity-20" />

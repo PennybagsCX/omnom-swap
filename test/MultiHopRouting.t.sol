@@ -451,7 +451,7 @@ contract MultiHopRoutingTest is Test {
         });
 
         vm.prank(user);
-        vm.expectRevert("Expired");
+        vm.expectRevert("Deadline expired");
         aggregator.executeSwap(req);
     }
 
@@ -488,7 +488,7 @@ contract MultiHopRoutingTest is Test {
         vm.warp(deadline + 1);
 
         vm.prank(user);
-        vm.expectRevert("Expired");
+        vm.expectRevert("Deadline expired");
         aggregator.executeSwap(req);
     }
 

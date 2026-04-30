@@ -39,6 +39,21 @@ contract DeployAggregator is Script {
     /// @notice YodeSwap Router
     address constant YODESWAP_ROUTER = 0x72d85Ab47fBfc5E7E04a8bcfCa1601D8f8cE1a50;
 
+    /// @notice FraxSwap Router
+    address constant FRAXSWAP_ROUTER = 0x0f6A5c5F341791e897eB1FB8fE8B4e30EC4F9bDf;
+
+    /// @notice ToolSwap Router
+    address constant TOOLSWAP_ROUTER = 0x9BBF70e64fbe8Fc7afE8a5Ae90F2DB1165013F93;
+
+    /// @notice IceCreamSwap V2 Router
+    address constant ICECREAMSWAP_ROUTER = 0xBb5e1777A331ED93E07cF043363e48d320eb96c4;
+
+    /// @notice PupSwap Router
+    address constant PUPSWAP_ROUTER = 0x05F2a20AF837268Be340a3bF82BB87069cF4a8C3;
+
+    /// @notice Bourbon Defi Router
+    address constant BOURBONSWAP_ROUTER = 0x6B172911a5Af8C9Eb2B7759688204624CcC9b0Ee;
+
     function run() external {
         // Read configuration from environment variables
         address treasury = vm.envAddress("TREASURY_ADDRESS");
@@ -60,6 +75,11 @@ contract DeployAggregator is Script {
         aggregator.addRouter(WOJAK_ROUTER);
         aggregator.addRouter(KIBBLESWAP_ROUTER);
         aggregator.addRouter(YODESWAP_ROUTER);
+        aggregator.addRouter(FRAXSWAP_ROUTER);
+        aggregator.addRouter(TOOLSWAP_ROUTER);
+        aggregator.addRouter(ICECREAMSWAP_ROUTER);
+        aggregator.addRouter(PUPSWAP_ROUTER);
+        aggregator.addRouter(BOURBONSWAP_ROUTER);
 
         vm.stopBroadcast();
 

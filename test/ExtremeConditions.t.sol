@@ -586,11 +586,12 @@ contract ExtremeConditionsTest is Test {
         );
 
         vm.prank(user);
-        vm.expectRevert("Expired");
+        vm.expectRevert("Deadline expired");
         aggregator.executeSwap(req);
     }
 
-    /// @notice Set deadline exactly at block.timestamp. Verify it succeeds.
+    /// @notice Set deadline exactly at block.timestamp. With the new MIN_DEADLINE_BUFFER
+    ///         requirement, deadline must be at least 1 minute in the future, so this should fail.
     function test_DeadlineAtBoundary() public {
         uint256 amountIn = 1000e18;
         uint256 feeAmount = (amountIn * FEE_BPS) / 10_000;
@@ -605,13 +606,12 @@ contract ExtremeConditionsTest is Test {
             expectedOut,
             address(router1),
             recipient,
-            block.timestamp // exact boundary
+            block.timestamp // exact boundary - but MIN_DEADLINE_BUFFER requires at least 1 minute
         );
 
         vm.prank(user);
+        vm.expectRevert("Deadline expired");
         aggregator.executeSwap(req);
-
-        assertEq(tokenB.balanceOf(recipient), expectedOut, "boundary deadline output mismatch");
     }
 
     /// @notice Set deadline 1 second before block.timestamp. Verify it reverts.
@@ -636,7 +636,7 @@ contract ExtremeConditionsTest is Test {
         );
 
         vm.prank(user);
-        vm.expectRevert("Expired");
+        vm.expectRevert("Deadline expired");
         aggregator.executeSwap(req);
     }
 

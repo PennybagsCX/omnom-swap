@@ -797,7 +797,7 @@ contract ComprehensiveRoutesTest is Test {
         );
 
         vm.prank(user);
-        vm.expectRevert("Expired");
+        vm.expectRevert("Deadline expired");
         aggregator.executeSwap(req);
     }
 

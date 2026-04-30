@@ -36,6 +36,10 @@ contract OmnomSwapAggregator is ReentrancyGuard {
     /// @notice Maximum allowed protocol fee in basis points (5%).
     uint256 public constant MAX_FEE_BPS = 500;
 
+    /// @notice Minimum deadline buffer — swaps must be valid for at least this many seconds.
+    /// @dev Prevents transactions with expired/past deadlines from being submitted.
+    uint256 public constant MIN_DEADLINE_BUFFER = 1 minutes;
+
     /// @notice Maximum deadline cap to prevent disabling deadline protection (2 hours).
     uint256 public constant MAX_DEADLINE = 2 hours;
 
@@ -212,8 +216,10 @@ contract OmnomSwapAggregator is ReentrancyGuard {
             IWWDOGE(WWDOGE).deposit{value: msg.value}();
         }
 
-        // -- Deadline check --------------------------------------
-        require(block.timestamp <= request.deadline, "Expired");
+        // -- Deadline check (ordered most restrictive first) ------------
+        // 1. Deadline must be in the future (with minimum buffer to prevent edge cases)
+        require(request.deadline >= block.timestamp + MIN_DEADLINE_BUFFER, "Deadline expired");
+        // 2. Deadline must not exceed max to prevent disabling protection
         require(request.deadline <= block.timestamp + MAX_DEADLINE, "Deadline too far");
 
         // -- Validation ------------------------------------------
@@ -264,6 +270,10 @@ contract OmnomSwapAggregator is ReentrancyGuard {
 
             // Approve the router to spend the tokens
             currentToken.safeApprove(step.router, stepAmountIn);
+
+            // Validate deadline is still valid before each swap (prevents edge case where
+            // block.timestamp crosses deadline between our check and router call)
+            require(block.timestamp <= request.deadline, "Expired during swap");
 
             // Execute the swap - tokens come back to this contract
             uint256[] memory amounts = IUniswapV2Router02(step.router).swapExactTokensForTokens(

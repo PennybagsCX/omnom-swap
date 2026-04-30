@@ -75,7 +75,7 @@ export const CONTRACT_REFERENCE: readonly { label: string; address: string; link
   { label: 'PupSwap Factory', address: CONTRACTS.PUPSWAP_FACTORY },
   { label: 'Bourbon Defi Router', address: CONTRACTS.BOURBONSWAP_ROUTER },
   { label: 'Bourbon Defi Factory', address: CONTRACTS.BOURBONSWAP_FACTORY },
-  { label: 'OmnomSwap Aggregator', address: '0x88F81031b258A0Fb789AC8d3A8071533BFADeC14', link: 'address' },
+  { label: 'OmnomSwap Aggregator', address: '0x8F8f0e68Ff11E35f8Ccb717771e8Efa748AE382f', link: 'address' },
   { label: 'Protocol Treasury', address: '0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88', link: 'address' },
 ] as const;
 
@@ -305,8 +305,8 @@ export const PAIR_ABI = parseAbi([
 
 // ─── OmnomSwap Aggregator Contract ────────────────────────────────────────────
 
-// Deployed to Dogechain mainnet — 2026-04-17 (v4: fixed WWDOGE address)
-export const OMNOMSWAP_AGGREGATOR_ADDRESS = '0x88F81031b258A0Fb789AC8d3A8071533BFADeC14' as `0x${string}`;
+// Deployed to Dogechain mainnet — 2026-04-30 (v5: all 10 routers + deadline validation)
+export const OMNOMSWAP_AGGREGATOR_ADDRESS = '0x8F8f0e68Ff11E35f8Ccb717771e8Efa748AE382f' as `0x${string}`;
 
 /** Known on-chain state for the deployed aggregator (used as fallback when RPC reads fail). */
 export const AGGREGATOR_KNOWN_STATE = {

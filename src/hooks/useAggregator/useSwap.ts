@@ -286,20 +286,20 @@ export function useSwap() {
       const deadline = BigInt(currentTimeSeconds + effectiveDeadlineSeconds);
 
       // Validate deadline is within acceptable range before sending to contract
+      // This prevents sending transactions with corrupted/invalid deadlines
       const minAcceptableDeadline = BigInt(currentTimeSeconds + 60); // At least 60 seconds
       const maxAcceptableDeadline = BigInt(currentTimeSeconds + 7200); // At most 2 hours
-      if (deadline < minAcceptableDeadline || deadline > maxAcceptableDeadline) {
-        console.error('[useSwap] Deadline out of range:', {
-          deadline: deadline.toString(),
-          deadlineHex: '0x' + deadline.toString(16),
-          minAcceptable: minAcceptableDeadline.toString(),
-          maxAcceptable: maxAcceptableDeadline.toString(),
-          currentTime: currentTimeSeconds,
-          effectiveDeadlineSeconds,
-          safeDeadlineMinutes,
-          hopCount,
-          extraPerHop,
-        });
+      
+      // Check for specifically corrupted deadline values (e.g., 0xe0000 = 917504)
+      // This value looks like a hex pattern that should never appear in a Unix timestamp
+      // 917504 is from 1970-01-11 — clearly invalid; modern valid timestamps are > 1 billion
+      const isDeadlineSuspiciouslyLow = deadline < BigInt(1_000_000_000); // Reject anything from 1970 to ~2001
+      
+      if (deadline < minAcceptableDeadline || deadline > maxAcceptableDeadline || isDeadlineSuspiciouslyLow) {
+        const errorMsg = `[useSwap] INVALID DEADLINE REJECTED — deadline: ${deadline.toString()} (0x${deadline.toString(16)}), currentTime: ${currentTimeSeconds}, valid range: [${minAcceptableDeadline.toString()}, ${maxAcceptableDeadline.toString()}], safeDeadlineMinutes: ${safeDeadlineMinutes}, hopCount: ${hopCount}`;
+        console.error(errorMsg);
+        // Throw to prevent sending a transaction that would fail on-chain
+        throw new Error(`Invalid deadline: ${deadline.toString()}. Please refresh and try again.`);
       }
 
       // DEBUG: Log buildSwapRequest inputs

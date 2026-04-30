@@ -244,6 +244,26 @@ export function calculatePathOutput(
       }
     }
 
+    console.debug(`[PathFinder] Hop ${i + 1} pool selection:`, {
+      tokenIn,
+      tokenOut,
+      candidatesCount: candidates.length,
+      candidates: candidates.map((c) => ({
+        dexName: c.dexName,
+        dexRouter: c.router,
+        reserveIn: c.reserveIn.toString(),
+        reserveInFormatted: Number(c.reserveIn) / 1e18,
+        reserveOut: c.reserveOut.toString(),
+        reserveOutFormatted: Number(c.reserveOut) / 1e18,
+        candidateOutput: calculateOutput(currentAmount, c.reserveIn, c.reserveOut).toString(),
+        candidateOutputFormatted: Number(calculateOutput(currentAmount, c.reserveIn, c.reserveOut)) / 1e18,
+      })),
+      selectedDex: bestEdge.dexName,
+      selectedRouter: bestEdge.router,
+      selectedOutput: bestOutput.toString(),
+      selectedOutputFormatted: Number(bestOutput) / 1e18,
+    });
+
     steps.push({
       dexRouter: bestEdge.router,
       dexName: bestEdge.dexName,

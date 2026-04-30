@@ -294,8 +294,28 @@ export function useSwap() {
         slippageBps,
         slippageMultiplier: slippageMultiplier.toString(),
         routeTotalExpectedOut: route.totalExpectedOut.toString(),
+        routeTotalExpectedOutHex: '0x' + route.totalExpectedOut.toString(16),
+        routeTotalExpectedOutFormatted: Number(route.totalExpectedOut) / 1e18,
         minTotalAmountOut: minTotalAmountOut.toString(),
+        minTotalAmountOutHex: '0x' + minTotalAmountOut.toString(16),
         minTotalAmountOutFormatted: Number(minTotalAmountOut) / 1e18,
+        feeBps: route.feeBps,
+        feeAmount: route.feeAmount.toString(),
+        totalAmountIn: route.totalAmountIn.toString(),
+        totalAmountInHex: '0x' + route.totalAmountIn.toString(16),
+        routeSteps: route.steps.map((s, idx) => ({
+          idx,
+          dexRouter: s.dexRouter,
+          dexRouterLower: s.dexRouter.toLowerCase(),
+          dexName: s.dexName,
+          path: s.path,
+          pathLower: s.path.map(p => p.toLowerCase()),
+          amountIn: s.amountIn.toString(),
+          amountInHex: '0x' + s.amountIn.toString(16),
+          expectedAmountOut: s.expectedAmountOut.toString(),
+          expectedAmountOutHex: '0x' + s.expectedAmountOut.toString(16),
+          expectedAmountOutFormatted: Number(s.expectedAmountOut) / 1e18,
+        })),
       });
 
       // Calculate per-step minAmountOut for slippage protection
@@ -343,6 +363,23 @@ export function useSwap() {
           amountIn: stepAmountIn,
           minAmountOut: stepMinOut,
         };
+      });
+
+      // DEBUG: Log the final built request to trace what goes to the contract
+      console.debug(`[useSwap] Final SwapRequest:`, {
+        tokenIn: route.steps[0]?.path[0],
+        tokenOut: route.steps[route.steps.length - 1]?.path[route.steps[route.steps.length - 1].path.length - 1],
+        amountIn: route.totalAmountIn.toString(),
+        minTotalAmountOut: minTotalAmountOut.toString(),
+        deadline: deadline.toString(),
+        stepCount: steps.length,
+        steps: steps.map((s, i) => ({
+          index: i,
+          router: s.router,
+          path: s.path,
+          amountIn: s.amountIn.toString(),
+          minAmountOut: s.minAmountOut.toString(),
+        })),
       });
 
       return {

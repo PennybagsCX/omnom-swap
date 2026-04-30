@@ -34,21 +34,6 @@ const FEE_DENOMINATOR = 10000n;
 const POOL_FEE_BPS = 30n; // 0.3% — standard UniswapV2 pool fee
 
 /**
- * Minimum output reserve threshold (in wei) for a pool edge to be included
- * in the liquidity graph.  Set to 1e18 (1 token with 18 decimals).
- *
- * Pools with less than this amount on the output side have such thin liquidity
- * that any non-trivial swap will either revert with INSUFFICIENT_OUTPUT_AMOUNT
- * or suffer extreme slippage (>50%).  Filtering them at graph-construction time
- * prevents the pathfinder from ever suggesting routes through these pools.
- *
- * The threshold is applied to the *output* reserve of each directed edge, so
- * a pool that is thin in one direction but deep in the other will still produce
- * a usable edge for the deep direction.
- */
-const MIN_RESERVE_OUT = 1_000_000_000_000_000_000n; // 1e18 = 1 token (18 decimals)
-
-/**
  * Minimum pools per hop threshold for route validation.
  * If fewer pools are available for a hop, warn that route may be unreliable.
  */
@@ -85,31 +70,27 @@ export function buildGraph(pools: PoolReserves[]): PoolEdge[] {
   for (const pool of pools) {
     if (pool.reserve0 <= 0n || pool.reserve1 <= 0n) continue;
 
-    // Forward edge: token0 → token1  (skip if output reserve below threshold)
-    if (pool.reserve1 >= MIN_RESERVE_OUT) {
-      edges.push({
-        tokenIn: pool.token0,
-        tokenOut: pool.token1,
-        reserveIn: pool.reserve0,
-        reserveOut: pool.reserve1,
-        factory: pool.factory,
-        dexName: pool.dexName,
-        router: pool.router,
-      });
-    }
+    // Forward edge: token0 → token1
+    edges.push({
+      tokenIn: pool.token0,
+      tokenOut: pool.token1,
+      reserveIn: pool.reserve0,
+      reserveOut: pool.reserve1,
+      factory: pool.factory,
+      dexName: pool.dexName,
+      router: pool.router,
+    });
 
-    // Reverse edge: token1 → token0  (skip if output reserve below threshold)
-    if (pool.reserve0 >= MIN_RESERVE_OUT) {
-      edges.push({
-        tokenIn: pool.token1,
-        tokenOut: pool.token0,
-        reserveIn: pool.reserve1,
-        reserveOut: pool.reserve0,
-        factory: pool.factory,
-        dexName: pool.dexName,
-        router: pool.router,
-      });
-    }
+    // Reverse edge: token1 → token0
+    edges.push({
+      tokenIn: pool.token1,
+      tokenOut: pool.token0,
+      reserveIn: pool.reserve1,
+      reserveOut: pool.reserve0,
+      factory: pool.factory,
+      dexName: pool.dexName,
+      router: pool.router,
+    });
   }
 
   return edges;

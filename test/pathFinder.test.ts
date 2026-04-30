@@ -67,7 +67,6 @@ interface RouteValidationResult {
 const MAX_HOPS = 4;
 const FEE_DENOMINATOR = 10000n;
 const POOL_FEE_BPS = 30n; // 0.3% — standard UniswapV2 pool fee
-const MIN_RESERVE_OUT = 1_000_000_000_000_000_000n; // 1e18 = 1 token (18 decimals)
 const MIN_POOLS_PER_HOP = 1;
 
 // ─── Implementation Under Test ────────────────────────────────────────────────
@@ -75,6 +74,8 @@ const MIN_POOLS_PER_HOP = 1;
 /**
  * Build a directed liquidity graph from pool reserves.
  * Each pool creates two edges (token0→token1 and token1→token0).
+ * NOTE: No MIN_RESERVE_OUT filtering - all non-zero reserves create edges.
+ * This allows routing through low-supply tokens like DC (~$400K total supply).
  */
 function buildGraph(pools: PoolReserves[]): PoolEdge[] {
   const edges: PoolEdge[] = [];
@@ -83,30 +84,26 @@ function buildGraph(pools: PoolReserves[]): PoolEdge[] {
     if (pool.reserve0 <= 0n || pool.reserve1 <= 0n) continue;
 
     // Forward edge: token0 → token1
-    if (pool.reserve1 >= MIN_RESERVE_OUT) {
-      edges.push({
-        tokenIn: pool.token0,
-        tokenOut: pool.token1,
-        reserveIn: pool.reserve0,
-        reserveOut: pool.reserve1,
-        factory: pool.factory,
-        dexName: pool.dexName,
-        router: pool.router,
-      });
-    }
+    edges.push({
+      tokenIn: pool.token0,
+      tokenOut: pool.token1,
+      reserveIn: pool.reserve0,
+      reserveOut: pool.reserve1,
+      factory: pool.factory,
+      dexName: pool.dexName,
+      router: pool.router,
+    });
 
     // Reverse edge: token1 → token0
-    if (pool.reserve0 >= MIN_RESERVE_OUT) {
-      edges.push({
-        tokenIn: pool.token1,
-        tokenOut: pool.token0,
-        reserveIn: pool.reserve1,
-        reserveOut: pool.reserve0,
-        factory: pool.factory,
-        dexName: pool.dexName,
-        router: pool.router,
-      });
-    }
+    edges.push({
+      tokenIn: pool.token1,
+      tokenOut: pool.token0,
+      reserveIn: pool.reserve1,
+      reserveOut: pool.reserve0,
+      factory: pool.factory,
+      dexName: pool.dexName,
+      router: pool.router,
+    });
   }
 
   return edges;
@@ -560,23 +557,27 @@ describe('Graph Construction Tests', () => {
       expect(edges.filter(e => e.tokenIn === 'tokenB' && e.tokenOut === 'tokenA').length).toBe(1);
     });
 
-    it('should filter out pools with reserves below MIN_RESERVE_OUT', () => {
+    it('should NOT filter out pools with reserves below old 1e18 threshold', () => {
+      // DC token has ~400K total supply (~$400K), not 1e18 (1 token with 18 decimals)
+      // Pools with low reserves should still be included for low-supply tokens
       const pools: PoolReserves[] = [
         {
-          reserve0: 500000000000000000n, // 0.5 tokens - below 1e18 threshold
-          reserve1: 800000000000000000n, // 0.8 tokens - also below 1e18 threshold
-          token0: 'tokenA',
-          token1: 'tokenB',
+          reserve0: 500000000000000000n, // 0.5 tokens - previously filtered by 1e18
+          reserve1: 1160000000000000000n, // DC pool on FraxSwap ~116K tokens
+          token0: 'WWDOGE',
+          token1: 'DC',
           factory: '0xfactory',
-          dexName: 'DogeSwap',
+          dexName: 'FraxSwap',
           router: '0x1234',
         },
       ];
 
       const edges = buildGraph(pools);
 
-      // Neither direction should pass MIN_RESERVE_OUT threshold
-      expect(edges.length).toBe(0);
+      // Both directions should now be included (no MIN_RESERVE_OUT filtering)
+      expect(edges.length).toBe(2);
+      expect(edges.find(e => e.tokenIn === 'WWDOGE' && e.tokenOut === 'DC')).toBeDefined();
+      expect(edges.find(e => e.tokenIn === 'DC' && e.tokenOut === 'WWDOGE')).toBeDefined();
     });
 
     it('should filter out pools with zero reserves', () => {
@@ -970,37 +971,40 @@ describe('Route with Missing Pools (Dogechain Bug Scenario)', () => {
     expect(result.error?.hopIndex).toBe(1); // 0-indexed, second hop (0xd43b... -> 0xomnom...)
   });
 
-  it('should handle route where all intermediate pools have low liquidity', () => {
+  it('should allow routing through pools with reserves below old 1e18 threshold', () => {
+    // DC token has ~400K total supply, so pools with reserves below 1e18 should still be usable
     const steps: RouteStep[] = [
       {
         dexRouter: '0x1234',
-        dexName: 'DogeSwap',
-        path: ['tokenA', 'tokenB'],
-        amountIn: 1000000000000000000n,
-        expectedAmountOut: 500000000000000000n, // 50% loss due to thin liquidity
+        dexName: 'FraxSwap',
+        path: ['WWDOGE', 'DC'],
+        amountIn: 1000000000000000000n, // 1 WWDOGE
+        expectedAmountOut: 500000000000000000n, // ~0.5 DC (depends on pool reserves)
       },
     ];
 
-    // Pool exists but with minimal reserves (below MIN_RESERVE_OUT threshold)
+    // Pool with reserves below old MIN_RESERVE_OUT threshold (1e18)
+    // FraxSwap DC pool has ~116K DC = 1160000000000000000n (above 1e18)
+    // But for smaller DEXes, reserves could be much lower
     const edges: PoolEdge[] = [
       {
-        tokenIn: 'tokenA',
-        tokenOut: 'tokenB',
-        reserveIn: 500000000000000000n, // Below 1e18 threshold
-        reserveOut: 500000000000000000n,
+        tokenIn: 'wwdoge',
+        tokenOut: 'dc',
+        reserveIn: 1000000000000000000n, // 1 WWDOGE
+        reserveOut: 1160000000000000000n, // ~1.16 DC (FraxSwap pool)
         factory: '0xfactory',
-        dexName: 'DogeSwap',
+        dexName: 'FraxSwap',
         router: '0x1234',
       },
     ];
 
-    // Should filter out the thin pool
-    const filteredEdges = edges.filter(e => e.reserveOut >= MIN_RESERVE_OUT);
-    expect(filteredEdges.length).toBe(0);
+    // Route validation should succeed - pools with low reserves are allowed
+    const result = validateRoutePools(steps, edges);
+    expect(result.valid).toBe(true);
 
-    // Route validation should fail
-    const result = validateRoutePools(steps, filteredEdges);
-    expect(result.valid).toBe(false);
+    // The output calculation should work and return non-zero
+    const output = calculateOutput(1000000000000000000n, edges[0].reserveIn, edges[0].reserveOut);
+    expect(output).toBeGreaterThan(0n);
   });
 });
 
@@ -1105,5 +1109,95 @@ describe('Edge Case: Single Pool Route', () => {
 
     expect(result.valid).toBe(true);
     expect(result.warnings.length).toBe(0); // 1 pool >= MIN_POOLS_PER_HOP (1)
+  });
+});
+
+describe('WWDOGE→DC Low-Supply Token Routing (Critical Bug Fix)', () => {
+  // DC token has ~400K total supply (~$400K market cap)
+  // Previously, MIN_RESERVE_OUT = 1e18 filtered out ALL DC pools
+  // This test verifies the fix allows routing through low-supply tokens
+
+  it('should find routes for WWDOGE→DC across all DEXes', () => {
+    // Simulate pools from all 10 DEXes for WWDOGE→DC pair
+    const pools: PoolReserves[] = [
+      // DogeSwap - 14.6M WWDOGE, 405K DC
+      { reserve0: 14600000000000000000000n, reserve1: 405000000000000000000n, token0: 'WWDOGE', token1: 'DC', factory: '0xDogeSwap', dexName: 'DogeSwap', router: '0x1111' },
+      // FraxSwap - 4.1B WWDOGE, 116K DC
+      { reserve0: 4100000000000000000000n, reserve1: 116000000000000000000n, token0: 'WWDOGE', token1: 'DC', factory: '0xFraxSwap', dexName: 'FraxSwap', router: '0x2222' },
+      // DogeShrk
+      { reserve0: 5000000000000000000000n, reserve1: 80000000000000000000n, token0: 'WWDOGE', token1: 'DC', factory: '0xDogeShrk', dexName: 'DogeShrk', router: '0x3333' },
+      // WOJAK
+      { reserve0: 3000000000000000000000n, reserve1: 50000000000000000000n, token0: 'WWDOGE', token1: 'DC', factory: '0xWOJAK', dexName: 'WOJAK', router: '0x4444' },
+      // KibbleSwap
+      { reserve0: 2000000000000000000000n, reserve1: 30000000000000000000n, token0: 'WWDOGE', token1: 'DC', factory: '0xKibble', dexName: 'KibbleSwap', router: '0x5555' },
+    ];
+
+    const edges = buildGraph(pools);
+
+    // All 10 DEXes should create edges (no MIN_RESERVE_OUT filtering)
+    // We have 5 pools above, each creates 2 edges (WWDOGE→DC and DC→WWDOGE)
+    expect(edges.length).toBe(10); // 5 pools × 2 directions
+
+    // Should find direct WWDOGE→DC route
+    const routes = findAllRoutes('wwdoge', 'dc', 1000000000000000000n, edges);
+    expect(routes.length).toBeGreaterThan(0);
+    expect(routes[0]).toContain('wwdoge');
+    expect(routes[0]).toContain('dc');
+  });
+
+  it('should calculate output for WWDOGE→DC route correctly', () => {
+    const pools: PoolReserves[] = [
+      // FraxSwap DC pool - 116K DC reserves
+      { reserve0: 4100000000000000000000n, reserve1: 116000000000000000000n, token0: 'WWDOGE', token1: 'DC', factory: '0xFraxSwap', dexName: 'FraxSwap', router: '0x2222' },
+    ];
+
+    const edges = buildGraph(pools);
+    const path = ['wwdoge', 'dc'];
+    const amountIn = 1000000000000000000n; // 1 WWDOGE
+
+    const result = calculatePathOutput(path, amountIn, edges);
+
+    expect(result.output).toBeGreaterThan(0n);
+    expect(result.steps.length).toBe(1);
+    expect(result.steps[0].dexName).toBe('FraxSwap');
+    expect(result.steps[0].expectedAmountOut).toBeGreaterThan(0n);
+  });
+
+  it('should NOT filter out DC edge even when DC total supply is < 1e18', () => {
+    // DC total supply ~400K tokens = 400000000000000000000000n (with 18 decimals)
+    // This is NOT 1e18, so pools should NOT be filtered
+    const pools: PoolReserves[] = [
+      { reserve0: 1000000000000000000n, reserve1: 100000000000000000n, token0: 'WWDOGE', token1: 'DC', factory: '0xTest', dexName: 'TestDEX', router: '0x9999' },
+    ];
+
+    const edges = buildGraph(pools);
+
+    // Both WWDOGE→DC and DC→WWDOGE edges should exist
+    expect(edges.length).toBe(2);
+    expect(edges.find(e => e.tokenIn.toLowerCase() === 'wwdoge' && e.tokenOut.toLowerCase() === 'dc')).toBeDefined();
+    expect(edges.find(e => e.tokenIn.toLowerCase() === 'dc' && e.tokenOut.toLowerCase() === 'wwdoge')).toBeDefined();
+  });
+
+  it('should allow multi-hop routes involving low-supply tokens', () => {
+    // Create a route: WWDOGE → hub → DC where DC is low-supply
+    const pools: PoolReserves[] = [
+      { reserve0: 10000000000000000000000n, reserve1: 10000000000000000000000n, token0: 'WWDOGE', token1: 'HUB', factory: '0xHub', dexName: 'DogeSwap', router: '0x1111' },
+      { reserve0: 1000000000000000000n, reserve1: 100000000000000000n, token0: 'HUB', token1: 'DC', factory: '0xDC', dexName: 'FraxSwap', router: '0x2222' },
+    ];
+
+    const edges = buildGraph(pools);
+
+    // 4 edges total (2 pools × 2 directions)
+    expect(edges.length).toBe(4);
+
+    // Should find 2-hop route: WWDOGE → HUB → DC
+    const routes = findAllRoutes('wwdoge', 'dc', 1000000000000000000n, edges);
+    expect(routes.length).toBe(1);
+    expect(routes[0]).toEqual(['wwdoge', 'hub', 'dc']);
+
+    // Calculate output through the route
+    const result = calculatePathOutput(routes[0], 1000000000000000000n, edges);
+    expect(result.output).toBeGreaterThan(0n);
+    expect(result.steps.length).toBe(2);
   });
 });

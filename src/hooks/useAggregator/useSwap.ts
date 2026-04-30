@@ -266,6 +266,18 @@ export function useSwap() {
     (route: RouteResult, slippageBps: number, deadlineMinutes: number): SwapRequest => {
       if (!address) throw new Error('Wallet not connected');
 
+      // DEBUG: Log buildSwapRequest inputs
+      console.debug(`[useSwap] buildSwapRequest:`, {
+        routeId: route.id,
+        totalExpectedOut: route.totalExpectedOut.toString(),
+        totalExpectedOutFormatted: Number(route.totalExpectedOut) / 1e18,
+        totalAmountIn: route.totalAmountIn.toString(),
+        slippageBps,
+        deadlineMinutes,
+        feeBps: route.feeBps,
+        stepsCount: route.steps.length,
+      });
+
       // Dynamic deadline: user setting + per-hop buffer (no artificial minimum)
       const userDeadlineSeconds = deadlineMinutes * 60;
       const hopCount = route.steps.length;
@@ -276,6 +288,15 @@ export function useSwap() {
       // Apply slippage to total expected output — this is the final safety check
       const slippageMultiplier = 10000n - BigInt(slippageBps);
       const minTotalAmountOut = (route.totalExpectedOut * slippageMultiplier) / 10000n;
+
+      // DEBUG: Log slippage calculation
+      console.debug(`[useSwap] Slippage calculation:`, {
+        slippageBps,
+        slippageMultiplier: slippageMultiplier.toString(),
+        routeTotalExpectedOut: route.totalExpectedOut.toString(),
+        minTotalAmountOut: minTotalAmountOut.toString(),
+        minTotalAmountOutFormatted: Number(minTotalAmountOut) / 1e18,
+      });
 
       // Calculate per-step minAmountOut for slippage protection
       const stepMinAmounts: bigint[] = route.steps.map((step) => {

@@ -126,7 +126,19 @@ export function calculateOutput(amountIn: bigint, reserveIn: bigint, reserveOut:
   const amountInWithFee = amountIn * (FEE_DENOMINATOR - POOL_FEE_BPS);
   const numerator = amountInWithFee * reserveOut;
   const denominator = reserveIn * FEE_DENOMINATOR + amountInWithFee;
-  return numerator / denominator;
+  const output = numerator / denominator;
+  
+  // DEBUG: Log calculation details for swap debugging
+  console.debug(`[PathFinder] calculateOutput:`, {
+    amountIn: amountIn.toString(),
+    reserveIn: reserveIn.toString(),
+    reserveOut: reserveOut.toString(),
+    feeBps: Number(POOL_FEE_BPS),
+    output: output.toString(),
+    outputFormatted: Number(output) / 1e18,
+  });
+  
+  return output;
 }
 
 /**
@@ -242,6 +254,14 @@ export function calculatePathOutput(
 
     currentAmount = bestOutput;
   }
+
+  // DEBUG: Log final route output
+  console.debug(`[PathFinder] calculatePathOutput: Final output for path ${path.join(' -> ')}:`, {
+    inputAmount: amountIn.toString(),
+    output: currentAmount.toString(),
+    outputFormatted: Number(currentAmount) / 1e18,
+    stepsCount: steps.length,
+  });
 
   return { output: currentAmount, steps };
 }
@@ -417,7 +437,7 @@ export function findAllViableRoutes(
 
     if (output > 0n) {
       const priceImpact = estimatePriceImpact(steps, edges);
-      results.push({
+      const result = {
         id: generateRouteId(steps),
         steps,
         totalAmountIn: amountIn,
@@ -425,7 +445,21 @@ export function findAllViableRoutes(
         priceImpact,
         feeAmount,
         feeBps,
+      };
+      // DEBUG: Log route calculation result
+      console.debug(`[PathFinder] Route calculated:`, {
+        routeId: result.id,
+        totalExpectedOut: result.totalExpectedOut.toString(),
+        totalExpectedOutFormatted: Number(result.totalExpectedOut) / 1e18,
+        feeAmount: result.feeAmount.toString(),
+        stepsCount: steps.length,
+        firstStep: steps[0] ? {
+          dexRouter: steps[0].dexRouter,
+          amountIn: steps[0].amountIn.toString(),
+          expectedAmountOut: steps[0].expectedAmountOut.toString(),
+        } : null,
       });
+      results.push(result);
     }
   }
 

@@ -156,6 +156,20 @@ export async function fetchPoolReserves(
 
     const [r0, r1] = reserves as [bigint, bigint, number];
 
+    // DEBUG: Log pool data being fetched
+    console.debug(`[PoolFetcher] fetchPoolReserves:`, {
+      factory: factoryAddress.toLowerCase(),
+      tokenA: tA,
+      tokenB: tB,
+      pairAddress: pairAddress.toLowerCase(),
+      reserve0: r0.toString(),
+      reserve1: r1.toString(),
+      token0: (token0 as string).toLowerCase(),
+      token1: (token1 as string).toLowerCase(),
+      reserve0Formatted: Number(r0) / 1e18,
+      reserve1Formatted: Number(r1) / 1e18,
+    });
+
     return {
       reserve0: r0,
       reserve1: r1,

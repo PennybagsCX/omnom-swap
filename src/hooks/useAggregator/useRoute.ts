@@ -117,44 +117,55 @@ export function useRoute(
 
       // ─── Fallback: Extreme Price Impact or Single DEX Detection ─────────────
       // If primary route has extreme price impact (>10%) or only returns 1 DEX,
-      // fetch additional pools from ALL_DEX_LIST directly to find better routes.
+      // or if no routes found at all, fetch additional pools from ALL_DEX_LIST 
+      // directly to find better routes.
       // This handles cases where registeredRoutersCache is stale/incomplete.
       const primaryHasExtremeImpact = routes.length > 0 && routes[0].priceImpact > 0.10;
       const uniqueDexCount = routes.length > 0
         ? new Set(routes.flatMap(r => r.steps.map(s => s.dexName))).size
         : 0;
-      const shouldFallback = primaryHasExtremeImpact || (routes.length > 0 && uniqueDexCount === 1 && allPools.length < 5);
+      
+      // Trigger fallback if:
+      // 1. Extreme price impact (>10%) detected on best route, OR
+      // 2. Only 1 DEX available AND fewer than 5 pools found, OR
+      // 3. ZERO routes found despite pools existing (edge case: BFS found paths but route computation failed)
+      const shouldFallback = primaryHasExtremeImpact 
+        || (uniqueDexCount === 1 && allPools.length < 5)
+        || (routes.length === 0 && allPools.length > 0);
 
       if (shouldFallback && client) {
-        console.warn(`[useRoute] Fallback triggered: extremeImpact=${primaryHasExtremeImpact}, uniqueDex=${uniqueDexCount}, poolCount=${allPools.length}`);
+        console.warn(`[useRoute] Fallback triggered: extremeImpact=${primaryHasExtremeImpact}, uniqueDex=${uniqueDexCount}, poolCount=${allPools.length}, routeCount=${routes.length}`);
 
-        // Fetch from all known DEXs (bypassing registered router filter)
-        const { fallbackGetPairs } = await import('../../services/pathFinder/poolFetcher');
-        const fallbackPools = await fallbackGetPairs(tokenInAddress, tokenOutAddress, client, true); // true = useAllDex
+        // Fetch from ALL_DEX_LIST directly using fetchPoolsForSwap with useAllDex=true
+        // This properly bypasses the registered router filter unlike fallbackGetPairs
+        const allDexPools = await fetchPoolsForSwap(tokenInAddress, tokenOutAddress, client, true);
+        
+        console.log(`[useRoute] Fallback: primary had ${allPools.length} pools, ALL_DEX found ${allDexPools.length} pools`);
 
-        if (fallbackPools.length > allPools.length) {
-          console.log(`[useRoute] Fallback found ${fallbackPools.length} pools vs ${allPools.length} from registered routers`);
-
-          // Merge and deduplicate pools
+        // Merge pools from both sources (deduplicate by factory:token0:token1)
+        if (allDexPools.length > 0) {
           const existingKeys = new Set(allPools.map(p => `${p.factory}:${p.token0}:${p.token1}`));
-          const newPools = fallbackPools.filter(p => {
+          const newPools = allDexPools.filter(p => {
             const key = `${p.factory}:${p.token0}:${p.token1}`;
             return !existingKeys.has(key);
           });
 
-          allPools = [...allPools, ...newPools];
-          setPools(allPools);
+          if (newPools.length > 0) {
+            console.log(`[useRoute] Fallback: found ${newPools.length} new pools not in primary results`);
+            allPools = [...allPools, ...newPools];
+            setPools(allPools);
 
-          // Recompute routes with full pool set
-          routes = findAllViableRoutes(
-            tokenInAddress,
-            tokenOutAddress,
-            amountInWei,
-            allPools,
-            feeBps,
-          );
+            // Recompute routes with full pool set
+            routes = findAllViableRoutes(
+              tokenInAddress,
+              tokenOutAddress,
+              amountInWei,
+              allPools,
+              feeBps,
+            );
 
-          console.log(`[useRoute] After fallback: ${routes.length} routes found, best priceImpact=${routes[0]?.priceImpact}`);
+            console.log(`[useRoute] After fallback: ${routes.length} routes found, best priceImpact=${routes[0]?.priceImpact}`);
+          }
         }
       }
 

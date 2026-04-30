@@ -6,39 +6,32 @@
  * PRICES / STATS:
  *   DexScreener (primary) — free, no rate limits
  *
- * TRADES (dual-source with smart fallback):
- *   1. DexScreener /orders (primary) — works for most tokens, free/unlimited
- *   2. GeckoTerminal /trades (fallback) — with retry/backoff resilience
- *      - Smart retry: exponential backoff 1s → 2s → 4s (max 30s, max 3 retries)
- *      - Shows loading state while retrying (no silent failures)
- *      - 1-hour cache TTL for successful results
- *      - Module-level queue prevents request stampede
- *      - On 429: retries up to 3 times with backoff before giving up
- *      - Console shows "Retrying in Xs..." instead of error spam
+ * TRADES:
+ *   GeckoTerminal (primary) — works on dogechain, returns 200 with full trade data
+ *   - Smart retry: exponential backoff 1s → 2s → 4s (max 30s, max 3 retries)
+ *   - Shows loading state while retrying (no silent failures)
+ *   - 1-hour cache TTL for successful results
+ *   - Module-level queue prevents request stampede
+ *   - On 429: retries up to 3 times with backoff before giving up
  *
- * GECKO_FALLBACK_ENABLED: Feature flag for trades GeckoTerminal fallback.
- * Keep DISABLED for token prices (causes 429 stampede).
- * Keep ENABLED for trades (user expects data, retry is acceptable).
+ * DexScreener /orders does NOT work on dogechain — returns 404 for all requests.
+ * Only used for price/volume stats, not trades.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { CONTRACTS, OMNOM_WWDOGE_POOL } from '../lib/constants';
 
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens';
 const STATS_STALE_MS = 60_000; // 1 min — DexScreener has no rate limits
-const DEX_ORDERS_STALE_MS = 60_000; // 1 min for DexScreener orders (free/unlimited)
 
-// ── GeckoTerminal Trades Fallback Configuration ──────────────────────────────
+// ── GeckoTerminal Trades Configuration ─────────────────────────────────────
 const GECKO_BASE = 'https://api.geckoterminal.com/api/v2';
 const GECKO_NETWORK = 'networks/dogechain';
 const GECKO_TRADES_STALE_MS = 60 * 60 * 1000; // 1 hour — trades don't change retroactively
 const GECKO_RETRY_BASE_DELAY_MS = 1_000; // 1 second starting delay
 const GECKO_RETRY_MAX_DELAY_MS = 30_000; // cap at 30 seconds
 const GECKO_MAX_RETRIES = 3; // max 3 retry attempts
-
-// Feature flag — trades GeckoTerminal fallback (keeps retrying on 429, eventually loads)
-const GECKO_FALLBACK_ENABLED = true;
 
 const TRADES_PAGE_SIZE = 10;
 
@@ -84,7 +77,7 @@ function savePersistGeckoCache(cache: Map<string, GeckoTradesCacheEntry>) {
 // Initialize persistent cache
 const persistentGeckoCache = loadPersistGeckoCache();
 
-// ── GeckoTerminal Trades Fetcher with Retry/Backoff ─────────────────────────────
+// ── GeckoTerminal Trades Fetcher with Retry/Backoff ─────────────────────────
 
 interface GeckoTrade {
   type: string;
@@ -254,7 +247,7 @@ async function fetchGeckoTradesWithRetry(
   }
 }
 
-// ── Interfaces ─────────────────────────────────────────────────────────────────
+// ── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface DexPair {
   pairAddress: string;
@@ -307,48 +300,7 @@ const baseOpts = {
   refetchOnReconnect: true,
 } as const;
 
-// ── DexScreener Orders (primary trades source) ─────────────────────────────────
-
-interface DexOrder {
-  id: string;
-  txHash: string;
-  blockchain: { id: string };
-  poolAddress: string;
-  blockTimestamp: number;
-  maker: { address: string; label: string };
-  side: string;
-  fromTokenAmount: string;
-  toTokenAmount: string;
-  fromToken_usdAmount?: string;
-  toToken_usdAmount?: string;
-  orderPrice?: string;
-  orderPrice_usd?: string;
-  source: string;
-}
-
-interface DexOrdersResponse {
-  orders: DexOrder[];
-  totalPages: number;
-  currentPage: number;
-}
-
-function mapDexOrderToTrade(order: DexOrder): Trade {
-  return {
-    kind: order.side || '',
-    tx_from_address: order.maker?.address || '',
-    volume_in_usd: order.fromToken_usdAmount || order.toToken_usdAmount || '0',
-    tx_hash: order.txHash || '',
-    block_timestamp: order.blockTimestamp ? new Date(order.blockTimestamp * 1000).toISOString() : '',
-    from_token_amount: order.fromTokenAmount || '0',
-    to_token_amount: order.toTokenAmount || '0',
-    from_token_address: '',
-    to_token_address: '',
-    price_from_in_usd: order.fromToken_usdAmount || '0',
-    price_to_in_usd: order.toToken_usdAmount || '0',
-  };
-}
-
-// ── useOmnomData Hook ──────────────────────────────────────────────────────────
+// ── useOmnomData Hook ─────────────────────────────────────────────────────────
 
 export function useOmnomData() {
   // DexScreener — single API call, no rate limits
@@ -372,81 +324,26 @@ export function useOmnomData() {
     ? (pairs.find(p => p.quoteToken?.symbol === 'WWDOGE') ?? pairs[0])
     : undefined;
 
-  // ── Trades State ─────────────────────────────────────────────────────────────
+  // ── GeckoTerminal Trades Query (PRIMARY trades source) ─────────────────────
+  // GeckoTerminal works on dogechain and returns 200 with full trade data
+  // DexScreener /orders returns 404 for dogechain, so we use GeckoTerminal directly
 
-  const [extraTrades, setExtraTrades] = useState<Trade[]>([]);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [geckoTrades, setGeckoTrades] = useState<Trade[]>([]);
-  const [isLoadingGecko, setIsLoadingGecko] = useState(false);
-  const geckoAbortRef = useRef<AbortController | null>(null);
-
-  // ── GeckoTerminal Trades Fallback (with retry/backoff) ───────────────────────
-
-  const fetchGeckoFallback = useCallback(async (poolAddress: string) => {
-    if (!GECKO_FALLBACK_ENABLED) return [];
-
-    setIsLoadingGecko(true);
-    geckoAbortRef.current?.abort();
-    geckoAbortRef.current = new AbortController();
-
-    try {
-      const trades = await fetchGeckoTradesWithRetry(
-        poolAddress,
-        geckoAbortRef.current.signal
-      );
-      setGeckoTrades(trades);
-      return trades;
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        console.log(`[GeckoTrades] Fallback error: ${err}`);
-      }
-      return [];
-    } finally {
-      setIsLoadingGecko(false);
-    }
-  }, []);
-
-  // Fetch GeckoTerminal trades when DexScreener orders return empty
-  useEffect(() => {
-    if (!primaryPair?.pairAddress) return;
-    if (!GECKO_FALLBACK_ENABLED) return;
-
-    // Only fetch GeckoTerminal if DexScreener orders are empty
-    // (We'll check this condition in the render)
-    return () => {
-      geckoAbortRef.current?.abort();
-    };
-  }, [primaryPair?.pairAddress]);
-
-  // ── DexScreener Orders Query (primary trades source) ─────────────────────────
-
-  const dexOrdersQuery = useQuery({
-    queryKey: ['omnomDexOrders'],
+  const geckoTradesQuery = useQuery({
+    queryKey: ['omnomGeckoTrades', primaryPair?.pairAddress],
     queryFn: async (): Promise<Trade[]> => {
-      try {
-        const res = await fetch(`${DEXSCREENER_URL}/${CONTRACTS.OMNOM_TOKEN}/orders?chain=dogechain&limit=${TRADES_PAGE_SIZE}`);
-        if (res.status === 404) {
-          console.log(`[DexOrders] DexScreener returned 404 for OMNOM orders`);
-          return [];
-        }
-        if (!res.ok) {
-          console.log(`[DexOrders] DexScreener returned HTTP ${res.status}`);
-          return [];
-        }
-        const json: DexOrdersResponse = await res.json();
-        const orders = json.orders || [];
-        console.log(`[DexOrders] DexScreener fetched ${orders.length} orders for OMNOM`);
-        return orders.map(mapDexOrderToTrade);
-      } catch (err) {
-        console.log(`[DexOrders] DexScreener fetch failed: ${err}`);
+      if (!primaryPair?.pairAddress) {
         return [];
       }
+      return fetchGeckoTradesWithRetry(primaryPair.pairAddress);
     },
-    staleTime: DEX_ORDERS_STALE_MS,
-    refetchInterval: DEX_ORDERS_STALE_MS,
+    staleTime: GECKO_TRADES_STALE_MS,
+    enabled: !!primaryPair?.pairAddress,
   });
 
-  // ── Multi-pool Orders from DexScreener ─────────────────────────────────────
+  const geckoTrades = geckoTradesQuery.data ?? [];
+
+  // ── Multi-pool Activity from DexScreener ────────────────────────────────────
+  // Get trade activity from other active pools (not primary pair)
 
   const activePoolOrdersQuery = useQuery({
     queryKey: ['omnomActivePoolOrders', pairs.length],
@@ -464,6 +361,8 @@ export function useOmnomData() {
         })
         .slice(0, 3);
 
+      // Get orders from DexScreener for active pools (if supported)
+      // Note: DexScreener /orders returns 404 on dogechain, but we try anyway
       const poolOrders: Trade[] = [];
       for (const pool of activePools) {
         const poolAddr = pool.pairAddress;
@@ -471,76 +370,39 @@ export function useOmnomData() {
         try {
           const res = await fetch(`${DEXSCREENER_URL}/${pool.baseToken.address}/orders?chain=dogechain&limit=5`);
           if (!res.ok) continue;
-          const json: DexOrdersResponse = await res.json();
+          const json = await res.json();
           const orders = json.orders || [];
           if (orders.length > 0) {
-            console.log(`[DexOrders] Pool ${poolAddr}: DexScreener fetched ${orders.length} orders`);
+            console.log(`[PoolOrders] Pool ${poolAddr}: DexScreener fetched ${orders.length} orders`);
             poolOrders.push(...orders.map(mapDexOrderToTrade));
           }
         } catch { /* skip failed pool fetch */ }
       }
       return poolOrders;
     },
-    staleTime: DEX_ORDERS_STALE_MS,
+    staleTime: 60_000,
     refetchInterval: false, // No automatic refresh — manual only
     enabled: pairs.length > 0,
   });
 
-  const dexOrders = dexOrdersQuery.data ?? [];
   const activePoolOrders = activePoolOrdersQuery.data ?? [];
 
-  // ── GeckoTerminal Fallback Trigger ───────────────────────────────────────────
-  // If DexScreener returns no orders and GeckoTerminal is enabled, fetch GeckoTerminal
-  const shouldFetchGeckoFallback = GECKO_FALLBACK_ENABLED && 
-    dexOrders.length === 0 && 
-    activePoolOrders.length === 0 &&
-    primaryPair?.pairAddress;
+  // ── Load More Trades ─────────────────────────────────────────────────────────
 
-  // Debounced GeckoTerminal fetch
-  const geckoFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (shouldFetchGeckoFallback && primaryPair?.pairAddress) {
-      // Debounce to avoid immediate fetch if DexScreener is still loading
-      geckoFetchTimeoutRef.current = setTimeout(() => {
-        fetchGeckoFallback(primaryPair.pairAddress);
-      }, 2000); // Wait 2s for DexScreener to potentially load
-    }
-
-    return () => {
-      if (geckoFetchTimeoutRef.current) {
-        clearTimeout(geckoFetchTimeoutRef.current);
-      }
-    };
-  }, [shouldFetchGeckoFallback, primaryPair?.pairAddress, fetchGeckoFallback]);
-
-  // ── Load More Trades ────────────────────────────────────────────────────────
-
-  const hasMoreTrades = dexOrders.length === TRADES_PAGE_SIZE;
+  const hasMoreTrades = geckoTrades.length >= TRADES_PAGE_SIZE;
 
   const loadMoreTrades = useCallback(async () => {
-    if (!hasMoreTrades || isLoadingMore) return;
-    setIsLoadingMore(true);
-    try {
-      const res = await fetch(`${DEXSCREENER_URL}/${CONTRACTS.OMNOM_TOKEN}/orders?chain=dogechain&limit=${TRADES_PAGE_SIZE}&offset=${dexOrders.length + activePoolOrders.length + extraTrades.length}`);
-      if (res.ok) {
-        const json: DexOrdersResponse = await res.json();
-        const orders = json.orders || [];
-        if (orders.length > 0) {
-          console.log(`[loadMoreTrades] DexScreener fetched ${orders.length} more orders`);
-          setExtraTrades(prev => [...prev, ...orders.map(mapDexOrderToTrade)]);
-        }
-      }
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [hasMoreTrades, isLoadingMore, dexOrders.length, activePoolOrders.length, extraTrades.length]);
+    // GeckoTerminal paginates automatically, but our cache stores all trades
+    // For now, loadMoreTrades is a no-op since we cache all trades for 1 hour
+    // In future, could implement offset-based pagination for GeckoTerminal
+  }, []);
 
-  // ── Combine All Trades (deduplicated) ──────────────────────────────────────
-  // Sources: DexScreener orders, active pool orders, GeckoTerminal fallback
+  // ── Combine All Trades (deduplicated) ───────────────────────────────────────
+  // Primary source: GeckoTerminal trades
+  // Secondary source: active pool orders from DexScreener (if available)
 
   const seen = new Set<string>();
-  const allTrades = [...dexOrders, ...activePoolOrders, ...geckoTrades, ...extraTrades]
+  const allTrades = [...geckoTrades, ...activePoolOrders]
     .filter(tx => {
       if (!tx.tx_hash || seen.has(tx.tx_hash)) return false;
       seen.add(tx.tx_hash);
@@ -552,7 +414,7 @@ export function useOmnomData() {
       return tb - ta;
     });
 
-  // ── Stats from DexScreener ─────────────────────────────────────────────────
+  // ── Stats from DexScreener ───────────────────────────────────────────────────
 
   const dexHasError = !!dexQuery.error && pairs.length === 0;
 
@@ -570,7 +432,7 @@ export function useOmnomData() {
     sells: sum.sells + (p.txns?.h24?.sells || 0),
   }), { buys: 0, sells: 0 });
 
-  // ── MEXC CEX Price/Volume ──────────────────────────────────────────────────
+  // ── MEXC CEX Price/Volume ────────────────────────────────────────────────────
 
   const mexcQuery = useQuery({
     queryKey: ['mexcOmnom'],
@@ -592,9 +454,10 @@ export function useOmnomData() {
   const mexcPrice: number | null = mexcHasError ? null : (mexcQuery.data?.price ?? 0);
   const mexcVol24: number | null = mexcHasError ? null : (mexcQuery.data?.volume24 ?? 0);
 
-  // ── Loading State (including GeckoTerminal fallback) ───────────────────────
+  // ── Loading State ────────────────────────────────────────────────────────────
+
   const isLoading = dexQuery.isLoading;
-  const isTradesLoading = dexOrdersQuery.isLoading || isLoadingGecko;
+  const isTradesLoading = geckoTradesQuery.isLoading;
 
   return {
     allPools: pairs,
@@ -614,7 +477,7 @@ export function useOmnomData() {
 
     // Trades pagination
     hasMoreTrades,
-    isLoadingMoreTrades: isLoadingMore,
+    isLoadingMoreTrades: false,
     loadMoreTrades,
 
     // Loading states
@@ -622,13 +485,39 @@ export function useOmnomData() {
     isTradesLoading,
     isPoolsListLoading: dexQuery.isLoading,
 
-    // GeckoTerminal fallback state
-    isGeckoLoading: isLoadingGecko,
+    // GeckoTerminal state
+    isGeckoLoading: geckoTradesQuery.isLoading,
 
     // Errors
-    isGeckoError: geckoTrades.length === 0 && isLoadingGecko,
+    isGeckoError: geckoTrades.length === 0 && geckoTradesQuery.isLoading,
     poolError: dexQuery.error,
-    tradesError: dexOrdersQuery.error,
+    tradesError: geckoTradesQuery.error,
     poolsListError: dexQuery.error,
+  };
+}
+
+// Helper function to map DexOrder to Trade (kept for potential future use)
+function mapDexOrderToTrade(order: {
+  side?: string;
+  maker?: { address?: string };
+  fromTokenAmount?: string;
+  toTokenAmount?: string;
+  fromToken_usdAmount?: string;
+  toToken_usdAmount?: string;
+  txHash?: string;
+  blockTimestamp?: number;
+}): Trade {
+  return {
+    kind: order.side || '',
+    tx_from_address: order.maker?.address || '',
+    volume_in_usd: order.fromToken_usdAmount || order.toToken_usdAmount || '0',
+    tx_hash: order.txHash || '',
+    block_timestamp: order.blockTimestamp ? new Date(order.blockTimestamp * 1000).toISOString() : '',
+    from_token_amount: order.fromTokenAmount || '0',
+    to_token_amount: order.toTokenAmount || '0',
+    from_token_address: '',
+    to_token_address: '',
+    price_from_in_usd: order.fromToken_usdAmount || '0',
+    price_to_in_usd: order.toToken_usdAmount || '0',
   };
 }

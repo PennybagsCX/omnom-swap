@@ -9,7 +9,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Search, X, RefreshCw, Plus } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import { TOKENS, CONTRACTS, type TokenType } from '../../lib/constants';
+import { TOKENS, CONTRACTS, resolveDexName, type TokenType } from '../../lib/constants';
 import { type TokenWithBalance } from '../../hooks/usePrioritizedTokenLoader';
 import { useTokenPrices } from '../../hooks/useTokenPrices';
 import { formatCompactPrice } from '../../lib/format';
@@ -474,11 +474,13 @@ function renderTokenRow(
           )}
           {tokenDexes && [...tokenDexes].map(dexId => {
             const style = DEX_COLORS[dexId];
+            const displayName = style?.label ?? resolveDexName(dexId);
+            // Unknown DEX — show resolved name (may be address or proper name)
             if (!style) {
-              // Unnamed DEX (contract address) — show truncated
+              const isAddress = dexId.startsWith('0x') && dexId.length === 42;
               return (
                 <span key={dexId} className="text-[9px] px-1 py-0.5 bg-gray-500/20 text-gray-400 rounded font-body">
-                  {dexId.slice(0, 6)}...
+                  {isAddress ? `${dexId.slice(0, 6)}...` : displayName}
                 </span>
               );
             }

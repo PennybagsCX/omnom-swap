@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ExternalLink, Droplets, PawPrint, AlertTriangle, Plus, Minus } from 'lucide-react';
-import { NETWORK_INFO, calcPriceImpact, impactColor } from '../lib/constants';
+import { NETWORK_INFO, calcPriceImpact, impactColor, resolveDexName } from '../lib/constants';
 import { useOmnomData, type DexPair } from '../hooks/useOmnomData';
 import { useNewPairMonitor } from '../hooks/useNewPairMonitor';
 import { LiquidityModal } from './LiquidityModal';
@@ -145,7 +145,7 @@ export function PoolsScreen() {
                         </span>
                       )}
                     </div>
-                    <span className="font-headline text-[10px] uppercase text-on-surface-variant">{dexId || '\u2014'}</span>
+                    <span className="font-headline text-[10px] uppercase text-on-surface-variant">{resolveDexName(dexId)}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
                     <div>
@@ -250,7 +250,7 @@ export function PoolsScreen() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-headline text-xs uppercase text-on-surface-variant">{dexId || '\u2014'}</span>
+                        <span className="font-headline text-xs uppercase text-on-surface-variant">{resolveDexName(dexId)}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <span className={`font-headline text-sm ${tvl > 0 && tvl < LOW_TVL_THRESHOLD ? 'text-yellow-400' : 'text-white'}`}>{fmtUsd(tvl)}</span>

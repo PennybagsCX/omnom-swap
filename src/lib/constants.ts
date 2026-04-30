@@ -238,6 +238,115 @@ export function isKnownDex(dexId: string): boolean {
 // Human-readable names for supported DEXes (shown in LP modal warning)
 export const KNOWN_DEX_NAMES = ['DogeSwap', 'DogeShrk', 'WOJAK Finance', 'KibbleSwap', 'YodeSwap', 'FraxSwap', 'ToolSwap', 'IceCreamSwap', 'PupSwap', 'Bourbon Defi'] as const;
 
+// ─── DEX Display Name Resolution ───────────────────────────────────────────────
+
+/**
+ * Maps lowercase DexScreener dexId strings (programmatic identifiers) to
+ * human-readable display names. DexScreener returns lowercase IDs like
+ * "dogeshrek", "kibbleswap", "icecreamswap" — these need mapping to proper names.
+ */
+export const DEX_NAME_MAP: Record<string, string> = {
+  // DexScreener lowercase IDs → Display names
+  dogeswap:      'DogeSwap',
+  dogeshrek:     'DogeShrk',
+  dogeshrek_:    'DogeShrk',
+  chewy:         'DogeShrk',     // DogeShrk also marketed as "Chewy"
+  fraxswap:      'FraxSwap',
+  kibbleswap:    'KibbleSwap',
+  kibbleswap_:    'KibbleSwap',
+  quickswap:     'QuickSwap',
+  quickswap_dogechain: 'QuickSwap',
+  yodeswap:      'YodeSwap',
+  yodeswap_:      'YodeSwap',
+  bourbondefi:   'Bourbon Defi',
+  bourbon_defi:   'Bourbon Defi',
+  sushiswap:      'SushiSwap',
+  uniswap:        'Uniswap',
+  wojak:          'WOJAK Finance',
+  wojak_:         'WOJAK Finance',
+  icecreamswap:   'IceCreamSwap',
+  ice_cream_swap: 'IceCreamSwap',
+  toolswap:       'ToolSwap',
+  toolswap_:       'ToolSwap',
+  pupswap:        'PupSwap',
+  pupswap_:        'PupSwap',
+  pup:            'PupSwap',
+};
+
+// ─── Router Address → DEX Name reverse lookup ─────────────────────────────────
+//
+// DexScreener sometimes returns raw router contract addresses as the dexId field.
+// This table maps known router addresses back to their human-readable DEX names.
+const ROUTER_TO_DEX_NAME: Record<string, string> = {
+  [CONTRACTS.DOGESWAP_V2_ROUTER.toLowerCase()]:   'DogeSwap',
+  [CONTRACTS.DOGESHRK_V2_ROUTER.toLowerCase()]:   'DogeShrk',
+  [CONTRACTS.WOJAK_ROUTER.toLowerCase()]:         'WOJAK Finance',
+  [CONTRACTS.KIBBLESWAP_ROUTER.toLowerCase()]:   'KibbleSwap',
+  [CONTRACTS.YODESWAP_ROUTER.toLowerCase()]:     'YodeSwap',
+  [CONTRACTS.FRAXSWAP_ROUTER.toLowerCase()]:     'FraxSwap',
+  [CONTRACTS.TOOLSWAP_ROUTER.toLowerCase()]:     'ToolSwap',
+  [CONTRACTS.ICECREAMSWAP_ROUTER.toLowerCase()]: 'IceCreamSwap',
+  [CONTRACTS.PUPSWAP_ROUTER.toLowerCase()]:       'PupSwap',
+  [CONTRACTS.BOURBONSWAP_ROUTER.toLowerCase()]:   'Bourbon Defi',
+};
+
+/**
+ * Resolve a DexScreener dexId to a human-readable display name.
+ * Falls back to capitalize-from-id or raw dexId if no mapping exists.
+ *
+ * @param dexId - Raw dexId string from DexScreener API or pool data
+ * @returns Human-readable DEX name
+ */
+export function resolveDexName(dexId: string | undefined | null): string {
+  if (!dexId) return '—';
+
+  const trimmed = dexId.trim();
+  if (!trimmed) return '—';
+
+  const lower = trimmed.toLowerCase();
+
+  // 0. If it looks like a hex address, check the router→name registry first
+  if (lower.startsWith('0x') && trimmed.length === 42) {
+    const resolved = ROUTER_TO_DEX_NAME[lower];
+    if (resolved) return resolved;
+    console.warn(`[resolveDexName] Unknown DEX address rendered: ${trimmed}`);
+    return 'Unknown DEX'; // Show friendly label for unresolvable router addresses
+  }
+
+  // 1. Direct lookup in DEX_NAME_MAP
+  const mapped = DEX_NAME_MAP[lower];
+  if (mapped) return mapped;
+
+  // 2. Check known DEX names list for case-insensitive match
+  const knownMatch = KNOWN_DEX_NAMES.find(
+    (name) => name.toLowerCase().replace(/\s+/g, '') === lower.replace(/\s+/g, ''),
+  );
+  if (knownMatch) return knownMatch;
+
+  // 3. Check if dexId is a known DEX via isKnownDex pattern match
+  // (includes 'dogeshrek', 'wojak', etc.) — return proper name
+  if (lower.includes('dogeshrek') || lower.includes('chewy')) return 'DogeShrk';
+  if (lower.includes('dogeswap')) return 'DogeSwap';
+  if (lower.includes('wojak')) return 'WOJAK Finance';
+  if (lower.includes('kibble')) return 'KibbleSwap';
+  if (lower.includes('yode')) return 'YodeSwap';
+  if (lower.includes('frax')) return 'FraxSwap';
+  if (lower.includes('tool')) return 'ToolSwap';
+  if (lower.includes('icecream') || lower.includes('ice cream')) return 'IceCreamSwap';
+  if (lower.includes('pup')) return 'PupSwap';
+  if (lower.includes('bourbon')) return 'Bourbon Defi';
+
+  // 5. Capitalize underscored_ids or return as-is
+  if (lower.includes('_')) {
+    return lower
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  return trimmed;
+}
+
 // Check if a router address uses standard ETH function names (addLiquidityETH, swapExactETHForTokens, etc.)
 // DogeShrk, WOJAK, KibbleSwap, ToolSwap all use standard UniswapV2 naming (not WDOGE-specific)
 export function isDogeshrkRouter(routerAddress: string): boolean {

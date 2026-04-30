@@ -86,6 +86,8 @@ export const CONTRACT_REFERENCE: readonly { label: string; address: string; link
   { label: 'PupSwap Factory', address: CONTRACTS.PUPSWAP_FACTORY },
   { label: 'Bourbon Defi Router', address: CONTRACTS.BOURBONSWAP_ROUTER },
   { label: 'Bourbon Defi Factory', address: CONTRACTS.BOURBONSWAP_FACTORY },
+  { label: 'BreadFactory Router', address: CONTRACTS.BREADFACTORY_ROUTER },
+  { label: 'BreadFactory Factory', address: CONTRACTS.BREADFACTORY_FACTORY },
   { label: 'OmnomSwap Aggregator', address: '0x8F8f0e68Ff11E35f8Ccb717771e8Efa748AE382f', link: 'address' },
   { label: 'Protocol Treasury', address: '0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88', link: 'address' },
 ] as const;

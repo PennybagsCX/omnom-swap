@@ -56,6 +56,8 @@ const ALL_DEX_LIST: DexInfo[] = [
   { name: 'IceCreamSwap', router: CONTRACTS.ICECREAMSWAP_ROUTER, factory: CONTRACTS.ICECREAMSWAP_FACTORY },
   { name: 'PupSwap', router: CONTRACTS.PUPSWAP_ROUTER, factory: CONTRACTS.PUPSWAP_FACTORY },
   { name: 'Bourbon Defi', router: CONTRACTS.BOURBONSWAP_ROUTER, factory: CONTRACTS.BOURBONSWAP_FACTORY },
+  // BreadFactory — active DEX with OMNOM/WWDOGE pool, $24.89 TVL
+  { name: 'BreadFactory', router: CONTRACTS.BREADFACTORY_ROUTER, factory: CONTRACTS.BREADFACTORY_FACTORY },
 ];
 
 const AGGREGATOR_ABI = parseAbi([

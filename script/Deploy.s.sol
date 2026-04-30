@@ -45,6 +45,9 @@ contract DeployAggregator is Script {
     /// @notice ToolSwap Router
     address constant TOOLSWAP_ROUTER = 0x9BBF70e64fbe8Fc7afE8a5Ae90F2DB1165013F93;
 
+    /// @notice DMUSK Router
+    address constant DMUSK_ROUTER = 0xaa4B2479C4c10B917Faa98Cc7c2B24D99BFA2174;
+
     /// @notice IceCreamSwap V2 Router
     address constant ICECREAMSWAP_ROUTER = 0xBb5e1777A331ED93E07cF043363e48d320eb96c4;
 
@@ -77,6 +80,7 @@ contract DeployAggregator is Script {
         aggregator.addRouter(YODESWAP_ROUTER);
         aggregator.addRouter(FRAXSWAP_ROUTER);
         aggregator.addRouter(TOOLSWAP_ROUTER);
+        aggregator.addRouter(DMUSK_ROUTER);
         aggregator.addRouter(ICECREAMSWAP_ROUTER);
         aggregator.addRouter(PUPSWAP_ROUTER);
         aggregator.addRouter(BOURBONSWAP_ROUTER);

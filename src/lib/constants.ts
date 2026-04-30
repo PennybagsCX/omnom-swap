@@ -74,6 +74,9 @@ export const CONTRACT_REFERENCE: readonly { label: string; address: string; link
   { label: 'FraxSwap Factory', address: CONTRACTS.FRAXSWAP_FACTORY },
   { label: 'ToolSwap Router', address: CONTRACTS.TOOLSWAP_ROUTER },
   { label: 'ToolSwap Factory', address: CONTRACTS.TOOLSWAP_FACTORY },
+  { label: 'ToolSwap Factory Alias', address: CONTRACTS.TOOLSWAP_FACTORY_ALIAS },
+  { label: 'DMUSK Router', address: CONTRACTS.DMUSK_ROUTER },
+  { label: 'DMUSK Factory', address: CONTRACTS.DMUSK_FACTORY },
   { label: 'IceCreamSwap Router', address: CONTRACTS.ICECREAMSWAP_ROUTER },
   { label: 'IceCreamSwap Factory', address: CONTRACTS.ICECREAMSWAP_FACTORY },
   { label: 'PupSwap Router', address: CONTRACTS.PUPSWAP_ROUTER },
@@ -281,6 +284,25 @@ export const DEX_NAME_MAP: Record<string, string> = {
   pup:            'PupSwap',
 };
 
+// ─── Factory Address → DEX Name reverse lookup ────────────────────────────────
+//
+// DexScreener sometimes returns raw factory contract addresses as the dexId field.
+// This table maps known factory addresses back to their human-readable DEX names.
+const FACTORY_TO_DEX_NAME: Record<string, string> = {
+  [CONTRACTS.DOGESWAP_FACTORY.toLowerCase()]:     'DogeSwap',
+  [CONTRACTS.DOGESHRK_FACTORY.toLowerCase()]:     'DogeShrk',
+  [CONTRACTS.WOJAK_FACTORY.toLowerCase()]:         'WOJAK Finance',
+  [CONTRACTS.KIBBLESWAP_FACTORY.toLowerCase()]:   'KibbleSwap',
+  [CONTRACTS.YODESWAP_FACTORY.toLowerCase()]:     'YodeSwap',
+  [CONTRACTS.FRAXSWAP_FACTORY.toLowerCase()]:     'FraxSwap',
+  [CONTRACTS.TOOLSWAP_FACTORY.toLowerCase()]:     'ToolSwap',
+  [CONTRACTS.TOOLSWAP_FACTORY_ALIAS.toLowerCase()]: 'ToolSwap',
+  [CONTRACTS.DMUSK_FACTORY.toLowerCase()]:         'DMUSK',
+  [CONTRACTS.ICECREAMSWAP_FACTORY.toLowerCase()]: 'IceCreamSwap',
+  [CONTRACTS.PUPSWAP_FACTORY.toLowerCase()]:       'PupSwap',
+  [CONTRACTS.BOURBONSWAP_FACTORY.toLowerCase()]:   'Bourbon Defi',
+};
+
 // ─── Router Address → DEX Name reverse lookup ─────────────────────────────────
 //
 // DexScreener sometimes returns raw router contract addresses as the dexId field.
@@ -314,10 +336,14 @@ export function resolveDexName(dexId: string | undefined | null): string {
 
   const lower = trimmed.toLowerCase();
 
-  // 0. If it looks like a hex address, check the router→name registry first
+  // 0. If it looks like a hex address, check the router→name registry first,
+  // then factory→name registry (covers cases where DexScreener returns factory address)
   if (lower.startsWith('0x') && trimmed.length === 42) {
     const resolved = ROUTER_TO_DEX_NAME[lower];
     if (resolved) return resolved;
+    // Also check factory addresses — DexScreener sometimes returns factory, not router
+    const factoryResolved = FACTORY_TO_DEX_NAME[lower];
+    if (factoryResolved) return factoryResolved;
     console.warn(`[resolveDexName] Unknown DEX address rendered: ${trimmed}`);
     return 'Unknown DEX'; // Show friendly label for unresolvable router addresses
   }

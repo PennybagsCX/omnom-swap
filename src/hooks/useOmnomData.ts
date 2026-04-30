@@ -31,7 +31,7 @@ const DEX_ORDERS_STALE_MS = 60_000; // 1 min for DexScreener orders (free/unlimi
 
 // ── GeckoTerminal Trades Fallback Configuration ──────────────────────────────
 const GECKO_BASE = 'https://api.geckoterminal.com/api/v2';
-const GECKO_NETWORK = 'network/dogechain';
+const GECKO_NETWORK = 'networks/dogechain';
 const GECKO_TRADES_STALE_MS = 60 * 60 * 1000; // 1 hour — trades don't change retroactively
 const GECKO_RETRY_BASE_DELAY_MS = 1_000; // 1 second starting delay
 const GECKO_RETRY_MAX_DELAY_MS = 30_000; // cap at 30 seconds
@@ -408,7 +408,7 @@ export function useOmnomData() {
     return () => {
       geckoAbortRef.current?.abort();
     };
-  }, [primaryPair?.pairAddress, GECKO_FALLBACK_ENABLED]);
+  }, [primaryPair?.pairAddress]);
 
   // ── DexScreener Orders Query (primary trades source) ─────────────────────────
 

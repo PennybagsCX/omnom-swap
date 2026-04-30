@@ -20,7 +20,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens';
 
 // ── Feature flags ─────────────────────────────────────────────────────────────
-const ENABLE_GECKO_FALLBACK = false; // DISABLED — causes 429 stampede with large token lists
+const ENABLE_GECKO_FALLBACK = true; // ENABLED — with retry/backoff resilience (same pattern as trades)
 // GECKO_BASE kept for reference only (fallback is disabled)
 const _GECKO_BASE = import.meta.env.PROD
   ? 'https://api.geckoterminal.com/api/v2'

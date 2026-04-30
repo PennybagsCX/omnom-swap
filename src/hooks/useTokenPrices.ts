@@ -350,10 +350,19 @@ export function useTokenPrices(tokenAddresses: string[]) {
 
     (async () => {
       // Step 1: DexScreener fetches — populates global persistent caches
+      // This is the PRIMARY source — free, unlimited, no 429s possible
+      const dexStart = Date.now();
       await fetchFromDexScreener(tokenAddresses, controller.signal);
+      const dexElapsed = Date.now() - dexStart;
 
-      // Step 2: Check if we're in 429 cooldown
+      // Check how many prices we got from DexScreener
+      const { prices: dexPrices } = buildStateFromCache(tokenAddresses);
+      const dexCount = [...dexPrices.values()].filter(p => p > 0).length;
+      console.log(`[TokenPrices] DexScreener: fetched ${dexCount}/${tokenAddresses.length} prices in ${dexElapsed}ms`);
+
+      // Step 2: Check if we're in GeckoTerminal 429 cooldown
       if (Date.now() < globalGeckoCooldownUntil) {
+        console.log(`[TokenPrices] GeckoTerminal in cooldown — using DexScreener data only`);
         const state = buildStateFromCache(tokenAddresses);
         setPriceMap(state.prices);
         setDexMap(state.dexes);
@@ -361,13 +370,14 @@ export function useTokenPrices(tokenAddresses: string[]) {
         return;
       }
 
-      // Step 3: Queue missing tokens for GeckoTerminal (batched, not individual)
+      // Step 3: Queue missing tokens for GeckoTerminal fallback (batched, rate-limited)
       const { prices: currentPrices } = buildStateFromCache(tokenAddresses);
       const missing = tokenAddresses.filter(
         addr => !currentPrices.has(addr.toLowerCase()),
       );
 
       if (missing.length > 0) {
+        console.log(`[TokenPrices] GeckoTerminal fallback: ${missing.length} tokens missing from DexScreener`);
         // Add to global queue (deduplicated — already-cached or in-flight tokens ignored)
         for (const addr of missing) {
           const lower = addr.toLowerCase();
@@ -387,6 +397,11 @@ export function useTokenPrices(tokenAddresses: string[]) {
           // Timeout after 30s to not block UI forever
           setTimeout(resolve, 30_000);
         });
+
+        // Log how many we got from GeckoTerminal
+        const { prices: finalPrices } = buildStateFromCache(tokenAddresses);
+        const geckoCount = [...finalPrices.values()].filter(p => p > 0).length - dexCount;
+        console.log(`[TokenPrices] GeckoTerminal fallback: ${Math.max(0, geckoCount)} additional prices retrieved`);
       }
 
       // Final state update from all cached data

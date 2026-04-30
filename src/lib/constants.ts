@@ -49,6 +49,9 @@ export const CONTRACTS = {
   // Bourbon Defi (Dogechain) — UniswapV2 compatible, WETH()=WWDOGE, 113 pairs
   BOURBONSWAP_ROUTER: '0x6B172911a5Af8C9Eb2B7759688204624CcC9b0Ee',
   BOURBONSWAP_FACTORY: '0x6B09Aa7a03d918b08C8924591fc792ce9d80CBb5',
+  // BreadFactory (Dogechain) — UniswapV2 compatible, WETH()=WWDOGE, active OMNOM/WWDOGE pool
+  BREADFACTORY_ROUTER: '0x270AB932F923813378cCac2853a2c391279ff0Ed',
+  BREADFACTORY_FACTORY: '0xBeE74FA515808793Dc283f3Dd28720Ada56BAf17',
 }
 
 // ─── Contract Reference (Disclosures Page) ──────────────────────────────────
@@ -187,6 +190,9 @@ export function getRouterForDex(dexId: string): `0x${string}` {
   if (lower.includes('bourbon')) {
     return CONTRACTS.BOURBONSWAP_ROUTER as `0x${string}`;
   }
+  if (lower.includes('bread')) {
+    return CONTRACTS.BREADFACTORY_ROUTER as `0x${string}`;
+  }
   return CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`;
 }
 
@@ -220,6 +226,9 @@ export function getFactoryForDex(dexId: string): `0x${string}` {
   if (lower.includes('bourbon')) {
     return CONTRACTS.BOURBONSWAP_FACTORY as `0x${string}`;
   }
+  if (lower.includes('bread')) {
+    return CONTRACTS.BREADFACTORY_FACTORY as `0x${string}`;
+  }
   return CONTRACTS.DOGESWAP_FACTORY as `0x${string}`;
 }
 
@@ -240,7 +249,9 @@ export function isKnownDex(dexId: string): boolean {
     lower.includes('icecream') ||
     lower.includes('ice cream') ||
     lower.includes('pup') ||
-    lower.includes('bourbon')
+    lower.includes('bourbon') ||
+    lower.includes('bread') ||
+    lower === '0xbee74fa515808793dc283f3dd28720ada56baf17'
   );
 }
 
@@ -282,6 +293,8 @@ export const DEX_NAME_MAP: Record<string, string> = {
   pupswap:        'PupSwap',
   pupswap_:        'PupSwap',
   pup:            'PupSwap',
+  // Factory address (BreadFactory reports raw factory address as dexId)
+  '0xbee74fa515808793dc283f3dd28720ada56baf17': 'BreadFactory',
 };
 
 // ─── Factory Address → DEX Name reverse lookup ────────────────────────────────
@@ -301,6 +314,7 @@ const FACTORY_TO_DEX_NAME: Record<string, string> = {
   [CONTRACTS.ICECREAMSWAP_FACTORY.toLowerCase()]: 'IceCreamSwap',
   [CONTRACTS.PUPSWAP_FACTORY.toLowerCase()]:       'PupSwap',
   [CONTRACTS.BOURBONSWAP_FACTORY.toLowerCase()]:   'Bourbon Defi',
+  [CONTRACTS.BREADFACTORY_FACTORY.toLowerCase()]:   'BreadFactory',
 };
 
 // ─── Router Address → DEX Name reverse lookup ─────────────────────────────────
@@ -319,6 +333,7 @@ const ROUTER_TO_DEX_NAME: Record<string, string> = {
   [CONTRACTS.ICECREAMSWAP_ROUTER.toLowerCase()]: 'IceCreamSwap',
   [CONTRACTS.PUPSWAP_ROUTER.toLowerCase()]:       'PupSwap',
   [CONTRACTS.BOURBONSWAP_ROUTER.toLowerCase()]:   'Bourbon Defi',
+  [CONTRACTS.BREADFACTORY_ROUTER.toLowerCase()]:   'BreadFactory',
 };
 
 /**
@@ -396,7 +411,8 @@ export function isDogeshrkRouter(routerAddress: string): boolean {
     || lower === CONTRACTS.DMUSK_ROUTER.toLowerCase()
     || lower === CONTRACTS.ICECREAMSWAP_ROUTER.toLowerCase()
     || lower === CONTRACTS.PUPSWAP_ROUTER.toLowerCase()
-    || lower === CONTRACTS.BOURBONSWAP_ROUTER.toLowerCase();
+    || lower === CONTRACTS.BOURBONSWAP_ROUTER.toLowerCase()
+    || lower === CONTRACTS.BREADFACTORY_ROUTER.toLowerCase();
 }
 
 import { parseAbi } from 'viem';

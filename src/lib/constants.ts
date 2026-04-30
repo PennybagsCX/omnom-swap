@@ -35,6 +35,11 @@ export const CONTRACTS = {
   // ToolSwap (Dogechain) — standard UniswapV2 with WETH (not WDOGE)
   TOOLSWAP_ROUTER: '0x9BBF70e64fbe8Fc7afE8a5Ae90F2DB1165013F93',
   TOOLSWAP_FACTORY: '0xC3550497E591Ac6ed7a7E03ffC711CfB7412E57F',
+  // ToolSwap alias — alternative factory deployed by same deployer, same router, 34 pairs
+  TOOLSWAP_FACTORY_ALIAS: '0xaF85e6eD0Da6f7F5F86F2f5A7d595B1b0F35706C',
+  // DMUSK (Dogechain) — branded fork, DMUSK token, staking pools, 24 pairs, deprecated
+  DMUSK_FACTORY: '0x4e5E0739231A3BdE1c51188aCfEabC19983541E6',
+  DMUSK_ROUTER: '0xaa4B2479C4c10B917Faa98Cc7c2B24D99BFA2174',
   // IceCreamSwap V2 (Dogechain) — multi-chain UniswapV2 fork, WETH()=WWDOGE
   ICECREAMSWAP_ROUTER: '0xBb5e1777A331ED93E07cF043363e48d320eb96c4',
   ICECREAMSWAP_FACTORY: '0x9E6d21E759A7A288b80eef94E4737D313D31c13f',
@@ -228,6 +233,7 @@ export function isKnownDex(dexId: string): boolean {
     lower.includes('yode') ||
     lower.includes('frax') ||
     lower.includes('tool') ||
+    lower.includes('dmusk') ||
     lower.includes('icecream') ||
     lower.includes('ice cream') ||
     lower.includes('pup') ||
@@ -236,7 +242,7 @@ export function isKnownDex(dexId: string): boolean {
 }
 
 // Human-readable names for supported DEXes (shown in LP modal warning)
-export const KNOWN_DEX_NAMES = ['DogeSwap', 'DogeShrk', 'WOJAK Finance', 'KibbleSwap', 'YodeSwap', 'FraxSwap', 'ToolSwap', 'IceCreamSwap', 'PupSwap', 'Bourbon Defi'] as const;
+export const KNOWN_DEX_NAMES = ['DogeSwap', 'DogeShrk', 'WOJAK Finance', 'KibbleSwap', 'YodeSwap', 'FraxSwap', 'ToolSwap', 'DMUSK', 'IceCreamSwap', 'PupSwap', 'Bourbon Defi'] as const;
 
 // ─── DEX Display Name Resolution ───────────────────────────────────────────────
 
@@ -268,6 +274,8 @@ export const DEX_NAME_MAP: Record<string, string> = {
   ice_cream_swap: 'IceCreamSwap',
   toolswap:       'ToolSwap',
   toolswap_:       'ToolSwap',
+  dmusk:           'DMUSK',
+  dmusk_:           'DMUSK',
   pupswap:        'PupSwap',
   pupswap_:        'PupSwap',
   pup:            'PupSwap',
@@ -285,6 +293,7 @@ const ROUTER_TO_DEX_NAME: Record<string, string> = {
   [CONTRACTS.YODESWAP_ROUTER.toLowerCase()]:     'YodeSwap',
   [CONTRACTS.FRAXSWAP_ROUTER.toLowerCase()]:     'FraxSwap',
   [CONTRACTS.TOOLSWAP_ROUTER.toLowerCase()]:     'ToolSwap',
+  [CONTRACTS.DMUSK_ROUTER.toLowerCase()]:         'DMUSK',
   [CONTRACTS.ICECREAMSWAP_ROUTER.toLowerCase()]: 'IceCreamSwap',
   [CONTRACTS.PUPSWAP_ROUTER.toLowerCase()]:       'PupSwap',
   [CONTRACTS.BOURBONSWAP_ROUTER.toLowerCase()]:   'Bourbon Defi',
@@ -332,6 +341,7 @@ export function resolveDexName(dexId: string | undefined | null): string {
   if (lower.includes('yode')) return 'YodeSwap';
   if (lower.includes('frax')) return 'FraxSwap';
   if (lower.includes('tool')) return 'ToolSwap';
+  if (lower.includes('dmusk')) return 'DMUSK';
   if (lower.includes('icecream') || lower.includes('ice cream')) return 'IceCreamSwap';
   if (lower.includes('pup')) return 'PupSwap';
   if (lower.includes('bourbon')) return 'Bourbon Defi';
@@ -357,6 +367,7 @@ export function isDogeshrkRouter(routerAddress: string): boolean {
     || lower === CONTRACTS.YODESWAP_ROUTER.toLowerCase()
     || lower === CONTRACTS.FRAXSWAP_ROUTER.toLowerCase()
     || lower === CONTRACTS.TOOLSWAP_ROUTER.toLowerCase()
+    || lower === CONTRACTS.DMUSK_ROUTER.toLowerCase()
     || lower === CONTRACTS.ICECREAMSWAP_ROUTER.toLowerCase()
     || lower === CONTRACTS.PUPSWAP_ROUTER.toLowerCase()
     || lower === CONTRACTS.BOURBONSWAP_ROUTER.toLowerCase();

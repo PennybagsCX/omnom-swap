@@ -147,7 +147,7 @@ Protocol fees are deducted from the input token before swap execution:
 
 ## Dogechain DEX Ecosystem
 
-OmnomSwap aggregates liquidity across 5 Dogechain DEXes:
+OmnomSwap aggregates liquidity across **10 Dogechain DEXes**:
 
 | DEX | Router Address | Type |
 |---|---|---|
@@ -156,6 +156,11 @@ OmnomSwap aggregates liquidity across 5 Dogechain DEXes:
 | WOJAK Finance | `0x9695906B4502D5397E6D21ff222e2C1a9e5654a9` | UniswapV2 (ETH) |
 | KibbleSwap | `0x6258c967337D3faF0C2ba3ADAe5656bA95419d5f` | UniswapV2 (ETH) |
 | YodeSwap | `0x72d85Ab47fBfc5E7E04a8bcfCa1601D8f8cE1a50` | UniswapV2 (ETH) |
+| FraxSwap | `0x0f6A5c5F341791e897eB1FB8fE8B4e30EC4F9bDf` | UniswapV2 (ETH) |
+| ToolSwap | `0x9BBF70e64fbe8Fc7afE8a5Ae90F2DB1165013F93` | UniswapV2 (ETH) |
+| IceCreamSwap | `0xBb5e1777A331ED93E07cF043363e48d320eb96c4` | UniswapV2 (ETH) |
+| PupSwap | `0x05F2a20AF837268Be340a3bF82BB87069cF4a8C3` | UniswapV2 (ETH) |
+| Bourbon Defi | `0x6B172911a5Af8C9Eb2B7759688204624CcC9b0Ee` | UniswapV2 (ETH) |
 
 All DEXes use UniswapV2-compatible contracts. DogeSwap uses WDOGE-specific function names (`swapExactWDOGEForTokens`), while the others use standard ETH naming (`swapExactETHForTokens`).
 
@@ -207,7 +212,7 @@ forge script script/Deploy.s.sol:DeployAggregator \
     -vvvv
 ```
 
-This deploys the contract and registers all 5 DEX routers in a single transaction.
+This deploys the contract and registers all 10 DEX routers in a single transaction.
 
 ### 3. Post-Deployment Setup (Optional)
 

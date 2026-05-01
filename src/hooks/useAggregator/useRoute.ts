@@ -16,7 +16,7 @@ import { parseUnits, formatUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { TOKENS, getTokenDecimals } from '../../lib/constants';
 
-import { fetchPoolsForSwap } from '../../services/pathFinder/poolFetcher';
+import { fetchPoolsForSwap, fetchHubTokenPairs } from '../../services/pathFinder/poolFetcher';
 import { findAllViableRoutes, getPerDexQuotes } from '../../services/pathFinder';
 import type { RouteResult, PoolReserves, TokenInfo } from '../../services/pathFinder/types';
 
@@ -154,19 +154,40 @@ export function useRoute(
             console.log(`[useRoute] Fallback: found ${newPools.length} new pools not in primary results`);
             allPools = [...allPools, ...newPools];
             setPools(allPools);
-
-            // Recompute routes with full pool set
-            routes = findAllViableRoutes(
-              tokenInAddress,
-              tokenOutAddress,
-              amountInWei,
-              allPools,
-              feeBps,
-            );
-
-            console.log(`[useRoute] After fallback: ${routes.length} routes found, best priceImpact=${routes[0]?.priceImpact}`);
           }
         }
+
+        // ALSO fetch hub-token intermediate pairs to enable multi-hop routing
+        // The standard fetchPoolsForSwap skips hub-to-hub pairs when both tokens are hubs,
+        // but the fallback needs to find intermediate pools for BFS to discover multi-hop routes
+        const hubPairs = await fetchHubTokenPairs(tokenInAddress, tokenOutAddress, client, true);
+        
+        console.log(`[useRoute] Fallback: found ${hubPairs.length} hub-token intermediate pools`);
+        
+        if (hubPairs.length > 0) {
+          const existingKeys = new Set(allPools.map(p => `${p.factory}:${p.token0}:${p.token1}`));
+          const newHubPools = hubPairs.filter(p => {
+            const key = `${p.factory}:${p.token0}:${p.token1}`;
+            return !existingKeys.has(key);
+          });
+          
+          if (newHubPools.length > 0) {
+            console.log(`[useRoute] Fallback: found ${newHubPools.length} new hub-hop pools`);
+            allPools = [...allPools, ...newHubPools];
+            setPools(allPools);
+          }
+        }
+
+        // Recompute routes with full pool set (including hub-hop pairs for multi-hop routing)
+        routes = findAllViableRoutes(
+          tokenInAddress,
+          tokenOutAddress,
+          amountInWei,
+          allPools,
+          feeBps,
+        );
+
+        console.log(`[useRoute] After fallback: ${routes.length} routes found, best priceImpact=${routes[0]?.priceImpact}`);
       }
 
       if (seq !== seqRef.current) return;

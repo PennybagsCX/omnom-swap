@@ -1,0 +1,387 @@
+- generic [ref=e3]:
+  - link "Skip to content" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - button "Go to home page" [ref=e7] [cursor=pointer]:
+        - heading "OMNOM Swap - DEX Aggregator on Dogechain" [level=1] [ref=e8]
+        - text: OMNOMSWAP
+      - tablist [ref=e9]:
+        - tab "SWAP" [selected] [ref=e10] [cursor=pointer]
+        - tab "POOLS" [ref=e11] [cursor=pointer]
+        - tab "STATS" [ref=e12] [cursor=pointer]
+        - link "BRIDGE" [ref=e13] [cursor=pointer]:
+          - /url: https://dive.dogechain.dog/bridge
+          - text: BRIDGE
+          - img [ref=e14]
+      - button "Connect wallet" [ref=e19] [cursor=pointer]: CONNECT
+  - main [ref=e21]:
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - button "Aggregated Swap" [ref=e24] [cursor=pointer]
+        - button "Direct Swap" [ref=e25] [cursor=pointer]
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - generic [ref=e29]:
+            - img [ref=e30]
+            - generic [ref=e32]: Savage Mode
+          - generic [ref=e34]:
+            - generic [ref=e35]:
+              - heading "Aggregated Swap" [level=2] [ref=e36]
+              - generic [ref=e37]:
+                - button "Learn about DEX aggregation" [ref=e38] [cursor=pointer]:
+                  - img [ref=e39]
+                - button "Swap settings" [ref=e42] [cursor=pointer]:
+                  - img [ref=e43]
+            - generic [ref=e47]:
+              - generic [ref=e48]:
+                - img [ref=e49]
+                - generic [ref=e51]: Learn
+              - generic [ref=e52]:
+                - generic [ref=e53]:
+                  - button "What is a DEX aggregator?" [ref=e54] [cursor=pointer]:
+                    - generic [ref=e55]:
+                      - img [ref=e57]
+                      - generic [ref=e61]: What is a DEX aggregator?
+                    - img [ref=e62]
+                  - generic [ref=e65]:
+                    - paragraph [ref=e66]: A DEX aggregator is an interface that computes swap routes across multiple decentralized exchanges (DEXes) to find routes with different output amounts. Unlike a single DEX, an aggregator routes trades across multiple venues to find the best available price.
+                    - paragraph [ref=e67]:
+                      - strong [ref=e68]: "How OmnomSwap works:"
+                    - list [ref=e69]:
+                      - listitem [ref=e70]: Reads pool reserves from all DEXes on Dogechain
+                      - listitem [ref=e71]: Builds a liquidity graph connecting all tokens
+                      - listitem [ref=e72]: Uses BFS to enumerate all possible routes up to 4 hops
+                      - listitem [ref=e73]: Calculates expected output for each route using the AMM formula
+                      - listitem [ref=e74]: Displays all viable routes sorted by output amount
+                      - listitem [ref=e75]: User selects a route and signs the transaction
+                    - paragraph [ref=e76]:
+                      - text: Route computation happens
+                      - strong [ref=e77]: off-chain
+                      - text: in your browser. Execution happens
+                      - strong [ref=e78]: on-chain
+                      - text: via a smart contract that atomically executes all hops in a single transaction.
+                    - paragraph [ref=e79]:
+                      - strong [ref=e80]: "⚠️ Known limitation:"
+                      - text: The aggregator only supports
+                      - strong [ref=e81]: exact-input
+                      - text: swaps (you specify the amount to sell). Exact-output swaps (specifying the amount to buy) are not supported. Additionally, the contract uses
+                      - code [ref=e82]: swapExactTokensForTokens
+                      - text: for all swaps — native DOGE must be wrapped to WWDOGE first.
+                - generic [ref=e83]:
+                  - button "What is slippage and how to set it?" [ref=e84] [cursor=pointer]:
+                    - generic [ref=e85]:
+                      - img [ref=e87]
+                      - generic [ref=e90]: What is slippage and how to set it?
+                    - img [ref=e91]
+                  - generic [ref=e94]:
+                    - paragraph [ref=e95]:
+                      - strong [ref=e96]: Slippage
+                      - text: is the difference between the expected output of a trade and the actual output when the transaction is executed on-chain. It occurs because pool reserves change between when you submit a transaction and when it is mined.
+                    - paragraph [ref=e97]:
+                      - strong [ref=e98]: Slippage tolerance
+                      - text: is the maximum acceptable difference. If the actual output would be less than (expected output × (1 - slippage%)), the transaction will revert.
+                    - paragraph [ref=e99]:
+                      - strong [ref=e100]: "How to set it:"
+                    - list [ref=e101]:
+                      - listitem [ref=e102]:
+                        - strong [ref=e103]: "0.1% – 0.5%:"
+                        - text: For liquid pairs with large reserves. Lower risk of unfavorable execution.
+                      - listitem [ref=e104]:
+                        - strong [ref=e105]: "0.5% – 1.0%:"
+                        - text: For moderately liquid pairs. Good balance of protection and execution rate.
+                      - listitem [ref=e106]:
+                        - strong [ref=e107]: "1.0%+:"
+                        - text: For illiquid pairs or large trades relative to pool size. Higher risk of unfavorable execution.
+                    - paragraph [ref=e108]: A higher slippage tolerance means your transaction is more likely to succeed, but you may receive fewer tokens than expected. A lower tolerance protects against unfavorable execution but may cause more transaction failures.
+                - generic [ref=e109]:
+                  - button "What are multi-hop routes?" [ref=e110] [cursor=pointer]:
+                    - generic [ref=e111]:
+                      - img [ref=e113]
+                      - generic [ref=e117]: What are multi-hop routes?
+                    - img [ref=e118]
+                  - generic [ref=e121]:
+                    - paragraph [ref=e122]:
+                      - text: A
+                      - strong [ref=e123]: multi-hop route
+                      - text: is a swap path that goes through one or more intermediate tokens before reaching the destination. For example, swapping Token A → Token B → Token C instead of a direct A → C swap.
+                    - paragraph [ref=e124]: "Multi-hop routes can yield a higher output than direct swaps when:"
+                    - list [ref=e125]:
+                      - listitem [ref=e126]: There is no direct pool for the desired pair
+                      - listitem [ref=e127]: The direct pool has low liquidity
+                      - listitem [ref=e128]: The intermediate pools offer a more favorable combined rate
+                    - paragraph [ref=e129]:
+                      - text: OmnomSwap explores routes up to
+                      - strong [ref=e130]: 4 hops
+                      - text: and displays all viable options. Each additional hop incurs gas costs and pool fees (0.3% per hop), which are factored into the output calculation.
+                - generic [ref=e131]:
+                  - button "What is an AMM?" [ref=e132] [cursor=pointer]:
+                    - generic [ref=e133]:
+                      - img [ref=e135]
+                      - generic [ref=e139]: What is an AMM?
+                    - img [ref=e140]
+                  - generic [ref=e143]:
+                    - paragraph [ref=e144]:
+                      - text: An
+                      - strong [ref=e145]: Automated Market Maker (AMM)
+                      - text: is a type of decentralized exchange that uses a mathematical formula to price assets, instead of an order book.
+                    - paragraph [ref=e146]:
+                      - strong [ref=e147]: "Constant-product formula:"
+                      - text: "The most common AMM model (used by UniswapV2 and the DEXes on Dogechain) uses the formula:"
+                    - generic [ref=e148]: x × y = k
+                    - paragraph [ref=e149]:
+                      - text: Where
+                      - code [ref=e150]: x
+                      - text: and
+                      - code [ref=e151]: "y"
+                      - text: represent the reserves of two tokens in a pool, and
+                      - code [ref=e152]: k
+                      - text: is a constant. When you swap token X for token Y, you add X to the pool and remove Y, keeping the product constant.
+                    - paragraph [ref=e153]:
+                      - strong [ref=e154]: "Output calculation with 0.3% fee:"
+                    - generic [ref=e155]: amountOut = (R_out × amountIn × 997) / (R_in × 1000 + amountIn × 997)
+                    - paragraph [ref=e156]: This formula is used by OmnomSwap to calculate expected outputs. The same formula can be used to independently verify any quoted amount by checking the on-chain reserves.
+                - generic [ref=e157]:
+                  - button "What is MEV and front-running?" [ref=e158] [cursor=pointer]:
+                    - generic [ref=e159]:
+                      - img [ref=e161]
+                      - generic [ref=e163]: What is MEV and front-running?
+                    - img [ref=e164]
+                  - generic [ref=e167]:
+                    - paragraph [ref=e168]:
+                      - strong [ref=e169]: Maximal Extractable Value (MEV)
+                      - text: is the maximum value that can be extracted from block production by including, excluding, or reordering transactions. MEV bots monitor the public mempool and exploit visible swap transactions for profit.
+                    - paragraph [ref=e170]:
+                      - strong [ref=e171]: "Common MEV attacks on swaps:"
+                    - list [ref=e172]:
+                      - listitem [ref=e173]:
+                        - strong [ref=e174]: "Front-running:"
+                        - text: A bot sees your pending swap in the mempool and submits the same swap with higher gas to execute first, moving the price against you.
+                      - listitem [ref=e175]:
+                        - strong [ref=e176]: "Sandwich attack:"
+                        - text: A bot places a buy order before your swap and a sell order after, profiting from the price movement your trade causes.
+                    - paragraph [ref=e177]:
+                      - strong [ref=e178]: "How slippage tolerance protects you:"
+                      - text: Setting an appropriate slippage tolerance limits the maximum loss from MEV. A lower slippage tolerance provides more protection but may cause more failed transactions.
+                    - paragraph [ref=e179]:
+                      - strong [ref=e180]: "Why exact-amount approvals are safer:"
+                      - text: OmnomSwap approves only the exact swap amount (plus a tiny 0.1% buffer) rather than unlimited token allowances. This means if the aggregator contract were ever compromised, the attacker could only access the tokens approved for the current swap — not your entire balance.
+                    - paragraph [ref=e181]:
+                      - text: ⚠️
+                      - strong [ref=e182]: Dogechain currently has no MEV protection infrastructure
+                      - text: (no Flashbots, no private mempools). All transactions are broadcast to the public mempool.
+                    - paragraph [ref=e183]:
+                      - strong [ref=e184]: "Tips to reduce MEV exposure:"
+                    - list [ref=e185]:
+                      - listitem [ref=e186]: Use conservative slippage settings (0.5% or lower)
+                      - listitem [ref=e187]: Avoid large single trades — split into smaller swaps if needed
+                      - listitem [ref=e188]: Trade during periods of lower network activity when MEV bots are less active
+                - generic [ref=e189]:
+                  - button "How to verify routes independently" [ref=e190] [cursor=pointer]:
+                    - generic [ref=e191]:
+                      - img [ref=e193]
+                      - generic [ref=e196]: How to verify routes independently
+                    - img [ref=e197]
+                  - generic [ref=e200]:
+                    - paragraph [ref=e201]: "All route calculations in OmnomSwap are based on publicly available on-chain data and standard mathematical formulas. You can verify any quoted output:"
+                    - list [ref=e202]:
+                      - listitem [ref=e203]:
+                        - strong [ref=e204]: "Check pool reserves:"
+                        - text: Look up the pair contract on the Dogechain block explorer and call
+                        - code [ref=e205]: getReserves()
+                        - text: to get current reserves.
+                      - listitem [ref=e206]:
+                        - strong [ref=e207]: "Apply the formula:"
+                        - text: "Use the constant-product formula with the 0.3% fee to calculate the expected output:"
+                        - generic [ref=e208]: amountOut = (R_out × amountIn × 997) / (R_in × 1000 + amountIn × 997)
+                      - listitem [ref=e209]:
+                        - strong [ref=e210]: "Account for the platform fee:"
+                        - text: "The input amount is reduced by 0.25% before route computation:"
+                        - generic [ref=e211]: swapAmount = amountIn - (amountIn × 25 / 10000)
+                      - listitem [ref=e212]:
+                        - strong [ref=e213]: "Compare:"
+                        - text: Your independently calculated result should closely match the output displayed by OmnomSwap (small differences may occur due to reserve changes between queries).
+                - generic [ref=e214]:
+                  - button "Risks of DeFi trading" [ref=e215] [cursor=pointer]:
+                    - generic [ref=e216]:
+                      - img [ref=e218]
+                      - generic [ref=e220]: Risks of DeFi trading
+                    - img [ref=e221]
+                  - generic [ref=e224]:
+                    - paragraph [ref=e225]: "Trading in decentralized finance (DeFi) carries significant risks. By using OmnomSwap, you acknowledge and accept the following:"
+                    - list [ref=e226]:
+                      - listitem [ref=e227]:
+                        - strong [ref=e228]: "Smart contract risk:"
+                        - text: Bugs or vulnerabilities in the aggregator contract, DEX contracts, or token contracts could result in loss of funds.
+                      - listitem [ref=e229]:
+                        - strong [ref=e230]: "Price volatility:"
+                        - text: Token prices can change rapidly. The output displayed may differ from the actual execution due to market movements.
+                      - listitem [ref=e231]:
+                        - strong [ref=e232]: "Impermanent loss:"
+                        - text: If you provide liquidity to pools, you may experience impermanent loss when token prices diverge.
+                      - listitem [ref=e233]:
+                        - strong [ref=e234]: "Liquidity risk:"
+                        - text: Pools may have insufficient liquidity for large trades, resulting in high price impact.
+                      - listitem [ref=e235]:
+                        - strong [ref=e236]: "Network risk:"
+                        - text: Dogechain network congestion or outages may delay or prevent transaction execution.
+                      - listitem [ref=e237]:
+                        - strong [ref=e238]: "MEV risk:"
+                        - text: Your transactions may be subject to front-running or sandwich attacks by MEV bots.
+                      - listitem [ref=e239]:
+                        - strong [ref=e240]: "No recourse:"
+                        - text: Transactions on the blockchain are irreversible. There is no customer support or dispute resolution process.
+                    - paragraph [ref=e241]: Only trade with funds you can afford to lose. This interface does not provide investment advice.
+            - generic [ref=e242]:
+              - heading "Transaction Settings" [level=3] [ref=e243]
+              - generic [ref=e244]:
+                - generic [ref=e245]:
+                  - generic [ref=e246]: Slippage Tolerance
+                  - generic [ref=e247]:
+                    - button "Auto" [ref=e248] [cursor=pointer]:
+                      - img [ref=e249]
+                      - text: Auto
+                    - button "Manual" [ref=e252] [cursor=pointer]:
+                      - img [ref=e253]
+                      - text: Manual
+                  - generic [ref=e255]:
+                    - generic [ref=e256]: "0.50"
+                    - generic [ref=e257]: "%"
+                  - generic [ref=e258]:
+                    - generic [ref=e259]: "Base: 0.5% + Impact: 0.00%"
+                    - generic [ref=e260]: "+ Hops: 0.0% + Variance: 0.00%"
+                  - paragraph [ref=e261]: ⚠️ Higher slippage increases MEV risk
+                - generic [ref=e262]:
+                  - generic [ref=e263]: Transaction Deadline
+                  - generic [ref=e264]:
+                    - spinbutton "Transaction deadline in minutes" [ref=e265]: "5"
+                    - generic [ref=e266]: minutes
+            - generic [ref=e267]:
+              - generic [ref=e268]:
+                - generic [ref=e269]: You Sell
+                - generic [ref=e271]: "Balance: 0"
+              - generic [ref=e273]:
+                - textbox "Amount to sell" [ref=e274]:
+                  - /placeholder: "0.00"
+                - button "WWDOGE WWDOGE" [ref=e275] [cursor=pointer]:
+                  - img "WWDOGE" [ref=e277]
+                  - generic [ref=e278]: WWDOGE
+                  - img [ref=e279]
+            - button "Swap token direction" [ref=e282] [cursor=pointer]:
+              - img [ref=e283]
+            - generic [ref=e288]:
+              - generic [ref=e289]:
+                - generic [ref=e290]: You Buy (Estimated)
+                - generic [ref=e292]: "Balance: 0"
+              - generic [ref=e294]:
+                - textbox "Amount to receive" [ref=e295]:
+                  - /placeholder: "0.00"
+                - button "OMNOM OMNOM" [ref=e296] [cursor=pointer]:
+                  - img "OMNOM" [ref=e298]
+                  - generic [ref=e299]: OMNOM
+                  - img [ref=e300]
+            - button "CONNECT WALLET" [disabled] [ref=e302] [cursor=pointer]
+          - generic [ref=e303]:
+            - generic [ref=e304]:
+              - img [ref=e305]
+              - generic [ref=e307]: Route
+            - generic [ref=e308]: No route found. Enter an amount to see available routes.
+          - generic [ref=e309]:
+            - button "Recent Swaps" [ref=e310] [cursor=pointer]:
+              - generic [ref=e311]: Recent Swaps
+              - img [ref=e312]
+            - generic [ref=e315]:
+              - img [ref=e378]
+              - generic [ref=e380]: No Swaps Found
+              - generic [ref=e381]: The void remains empty
+          - generic [ref=e316]:
+            - generic [ref=e317]:
+              - paragraph [ref=e318]: $OMNOM Price
+              - paragraph [ref=e319]: $0.0₈310900
+              - paragraph [ref=e320]: ON CHAIN
+            - generic [ref=e321]:
+              - paragraph [ref=e322]: $OMNOM 24H Vol
+              - paragraph [ref=e323]: $4.08K
+              - paragraph [ref=e324]: ON CHAIN
+            - generic [ref=e325]:
+              - paragraph [ref=e326]: $OMNOM Market Cap
+              - paragraph [ref=e327]: $963.86K
+              - paragraph [ref=e328]: BEAST MODE
+          - generic [ref=e329]:
+            - generic [ref=e330]:
+              - paragraph [ref=e331]: MEXC $OMNOM Price
+              - paragraph [ref=e332]: $0.0₈311450
+              - paragraph [ref=e333]: CEX
+            - generic [ref=e334]:
+              - paragraph [ref=e335]: MEXC $OMNOM 24H Vol
+              - paragraph [ref=e336]: $55.04K
+              - paragraph [ref=e337]: CEX
+        - generic [ref=e339]:
+          - generic [ref=e340]:
+            - generic [ref=e341]:
+              - img [ref=e342]
+              - heading "Treasury & Protocol" [level=3] [ref=e346]
+            - button "Refresh balances" [ref=e347]:
+              - img [ref=e348]
+          - generic [ref=e353]:
+            - generic [ref=e382]:
+              - generic [ref=e383]:
+                - img [ref=e384]
+                - generic [ref=e387]: Treasury Wallet
+              - link "0x628f3F4A...3fF4FA88" [ref=e389] [cursor=pointer]:
+                - /url: https://explorer.dogechain.dog/address/0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88
+                - text: 0x628f3F4A...3fF4FA88
+                - img [ref=e390]
+              - generic [ref=e394]:
+                - generic [ref=e395]:
+                  - generic [ref=e396]:
+                    - img [ref=e397]
+                    - generic [ref=e402]: WWDOGE
+                  - generic [ref=e403]: "37.88"
+                - generic [ref=e404]:
+                  - generic [ref=e405]:
+                    - img [ref=e406]
+                    - generic [ref=e411]: OMNOM
+                  - generic [ref=e412]: 8.90M
+                - generic [ref=e413]:
+                  - generic [ref=e414]:
+                    - img [ref=e415]
+                    - generic [ref=e420]: DC
+                  - generic [ref=e421]: 4.28K
+            - generic [ref=e422]:
+              - generic [ref=e423]:
+                - img [ref=e424]
+                - generic [ref=e428]: Protocol Fee
+              - generic [ref=e429]: 0.25%
+              - generic [ref=e430]: 25 basis points
+            - generic [ref=e431]:
+              - generic [ref=e432]:
+                - img [ref=e433]
+                - generic [ref=e435]: Contract Owner
+              - link "0x25630A00...3F7164d9" [ref=e437] [cursor=pointer]:
+                - /url: https://explorer.dogechain.dog/address/0x25630A005C42EcCE56453f4f3FF4e7893F7164d9
+                - text: 0x25630A00...3F7164d9
+                - img [ref=e438]
+        - button "📋 Protocol Disclosures View our complete disclosures, legal notices, and compliance information →" [ref=e355] [cursor=pointer]:
+          - generic [ref=e356]: 📋
+          - generic [ref=e357]:
+            - generic [ref=e358]: Protocol Disclosures
+            - generic [ref=e359]: View our complete disclosures, legal notices, and compliance information
+          - generic [ref=e360]: →
+  - contentinfo [ref=e361]:
+    - generic [ref=e362]:
+      - generic [ref=e363]: "$OMNOM: Unleash the Beast. Defend the Doge. Devour the Rest."
+      - generic [ref=e364]:
+        - button "DISCLOSURES" [ref=e365] [cursor=pointer]
+        - link "X (Twitter)" [ref=e366] [cursor=pointer]:
+          - /url: https://x.com/omnomtoken
+        - link "Telegram" [ref=e367] [cursor=pointer]:
+          - /url: https://t.me/omnomtoken_dc
+        - link "Docs" [ref=e368] [cursor=pointer]:
+          - /url: https://github.com/PennybagsCX/omnom-swap
+          - text: Docs
+          - img [ref=e369]
+  - button "14 reqs 3f" [ref=e442] [cursor=pointer]:
+    - generic [ref=e377]:
+      - text: 14 reqs
+      - generic [ref=e443]: 3f

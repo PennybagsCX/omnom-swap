@@ -338,6 +338,86 @@ export async function fetchPoolsForPair(
 }
 
 /**
+ * Fetch hub-token intermediate pairs needed for multi-hop routing.
+ * This specifically queries pairs between hub tokens and other hub tokens
+ * to enable the BFS to discover multi-hop paths when direct pairs are thin.
+ *
+ * @param tokenIn - User's input token
+ * @param tokenOut - User's output token
+ * @param client - Public client for RPC calls
+ * @param useAllDex - If true, queries ALL_DEX_LIST regardless of on-chain router registration.
+ */
+export async function fetchHubTokenPairs(
+  _tokenIn: string,
+  _tokenOut: string,
+  client: PublicClient = defaultClient,
+  useAllDex: boolean = false,
+): Promise<PoolReserves[]> {
+  let dexList: DexInfo[];
+  if (useAllDex) {
+    dexList = ALL_DEX_LIST;
+  } else {
+    await getRegisteredRouters(client);
+    dexList = getDexList();
+  }
+
+  const hubAddresses = HUB_TOKENS.map(h => h.address.toLowerCase());
+  void hubAddresses; // hubAddresses used for documentation purposes
+
+  // Collect all hub pairs needed for multi-hop routing
+  const hubPairs: [string, string][] = [];
+
+  for (const hub of HUB_TOKENS) {
+    const hubLower = hub.address.toLowerCase();
+
+    // WWDOGE ↔ OMNOM (the key liquidity pair)
+    hubPairs.push([CONTRACTS.WWDOGE, CONTRACTS.OMNOM_TOKEN]);
+
+    // WWDOGE ↔ DC (if DC isn't one of our tokens)
+    if (hubLower !== CONTRACTS.DC_TOKEN.toLowerCase()) {
+      hubPairs.push([CONTRACTS.WWDOGE, CONTRACTS.DC_TOKEN]);
+    }
+
+    // OMNOM ↔ DC (if both aren't the same)
+    const omnomLower = CONTRACTS.OMNOM_TOKEN.toLowerCase();
+    const dcLower = CONTRACTS.DC_TOKEN.toLowerCase();
+    if (hubLower !== omnomLower && hubLower !== dcLower) {
+      hubPairs.push([CONTRACTS.OMNOM_TOKEN, CONTRACTS.DC_TOKEN]);
+    }
+  }
+
+  // Deduplicate
+  const seen = new Set<string>();
+  const uniquePairs = hubPairs.filter(([a, b]) => {
+    const key = `${a.toLowerCase()}:${b.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const pools: PoolReserves[] = [];
+
+  const promises = uniquePairs.flatMap(([tA, tB]) =>
+    dexList.map(async (dex) => {
+      const pool = await fetchPoolReserves(dex.factory, tA, tB, client);
+      if (pool) {
+        pool.dexName = dex.name;
+        pool.router = dex.router.toLowerCase();
+        pool.factory = dex.factory.toLowerCase();
+      }
+      return pool;
+    }),
+  );
+
+  const results = await Promise.allSettled(promises);
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value) pools.push(r.value);
+  }
+
+  return pools;
+}
+
+/**
  * Fetch pools needed to route between two tokens using hub-token strategy.
  *
  * Queries only:

@@ -705,18 +705,23 @@ contract ComprehensiveRoutesTest is Test {
     }
 
     /// @notice D18: Token to itself — should succeed (mock router doesn't prevent it).
+    ///         For same-token swaps, the aggregator measures output via balance diff,
+    ///         so the NET output is (swapAmount * rate - swapAmount), not (swapAmount * rate).
     function test_SameTokenSwap() public {
         uint256 amountIn = 100e18;
         uint256 feeAmount = (amountIn * FEE_BPS) / BPS_DENOM;
         uint256 swapAmount = amountIn - feeAmount;
-        uint256 expectedOut = _expectedOut(swapAmount, RATE_2X);
+        // Net output: router returns 2x, but aggregator already held swapAmount before the call.
+        // balBefore = swapAmount, router takes swapAmount (bal=0), gives 2*swapAmount back.
+        // actualOutput = 2*swapAmount - swapAmount = swapAmount.
+        uint256 expectedNetOut = swapAmount;
 
         OmnomSwapAggregator.SwapRequest memory req = _singleSwap(
             address(tokenA),
             address(tokenA), // same token
             amountIn,
             swapAmount,
-            expectedOut,
+            expectedNetOut,
             address(dex1),
             recipient,
             block.timestamp + 1 hours
@@ -726,7 +731,7 @@ contract ComprehensiveRoutesTest is Test {
         vm.prank(user);
         aggregator.executeSwap(req);
 
-        assertEq(tokenA.balanceOf(recipient), expectedOut, "same-token swap output mismatch");
+        assertEq(tokenA.balanceOf(recipient), expectedNetOut, "same-token swap output mismatch");
     }
 
     /// @notice D19: Swap 0 — should revert with "Amount must be greater than zero".

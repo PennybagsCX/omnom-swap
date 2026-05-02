@@ -504,11 +504,13 @@ contract FlipSwapConsistencyTest is Test {
 
         uint256 deadline = block.timestamp + 300;
 
+        // Same-token swap at 1:1 rate produces 0 net output (balance diff),
+        // so minAmountOut must be 0 for the swap to succeed.
         OmnomSwapAggregator.SwapRequest memory request = buildSingleHopRequest(
             address(wwdoge),
             address(wwdoge),
             sellAmount,
-            1,
+            0,
             deadline
         );
 

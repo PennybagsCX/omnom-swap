@@ -161,6 +161,42 @@ contract MaliciousRouter {
             "Transfer out failed"
         );
     }
+
+    /// @notice Fee-on-transfer variant required by the aggregator.
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external {
+        require(block.timestamp <= deadline, "Expired");
+
+        address tokenIn = path[0];
+        address tokenOut = path[path.length - 1];
+
+        uint256 amountOut = (amountIn * exchangeRate) / 1e18;
+        require(amountOut >= amountOutMin, "Insufficient output");
+
+        // Transfer input tokens from caller (aggregator) to this contract
+        MockERC20(tokenIn).forceTransferFrom(msg.sender, address(this), amountIn);
+
+        // Attempt reentrancy via router callback
+        if (address(target) != address(0) && callbackCount < maxCallback) {
+            callbackCount++;
+            try target.executeSwap(pendingRequest) {
+                // If succeeds, bug
+            } catch {
+                // Expected
+            }
+        }
+
+        // Transfer output tokens to recipient
+        require(
+            IERC20(tokenOut).transfer(to, amountOut),
+            "Transfer out failed"
+        );
+    }
 }
 
 // ============================================================

@@ -147,7 +147,9 @@ export function useGasEstimate() {
 
           // Check if this was a cancellation
           if (errorMessage === 'Cancelled' || abortController.signal.aborted) {
-            throw new Error('Cancelled');
+            const cancelErr = new Error('Cancelled');
+            cancelErr.cause = err;
+            throw cancelErr;
           }
 
           console.error('[useGasEstimate] Estimation failed (attempt ' + attempt + '):', errorMessage);
@@ -165,7 +167,9 @@ export function useGasEstimate() {
 
             // Check if we were cancelled during backoff
             if (abortController.signal.aborted) {
-              throw new Error('Cancelled');
+              const backoffErr = new Error('Cancelled');
+              backoffErr.cause = err;
+              throw backoffErr;
             }
 
             return attemptEstimate(attempt + 1);

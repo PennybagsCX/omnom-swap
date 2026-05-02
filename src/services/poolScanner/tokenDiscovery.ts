@@ -167,6 +167,6 @@ export function getTokenInfo(
  */
 export function clearTokenDiscoveryCache(): void {
   cachedRegistry = null;
-  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* localStorage unavailable */ }
   console.log('[TokenDiscovery] Cache cleared');
 }

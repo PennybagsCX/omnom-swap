@@ -306,8 +306,9 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
   // Cleanup on unmount
   useEffect(() => {
+    const ref = gasEstimateRef;
     return () => {
-      gasEstimateRef.current.mounted = false;
+      ref.current.mounted = false;
     };
   }, []);
 

@@ -294,12 +294,12 @@ export function MonitorOverlay() {
 
   const handleToggle = useCallback(() => setExpanded(prev => !prev), []);
 
-  if (!monitor.enabled) return null;
-
-  // Get counts for tab badges
+  // Get counts for tab badges — hooks must be called unconditionally
   const { unacknowledgedCount: alertCount } = useMonitoringAlerts(undefined, 100);
   const stats = useSwapStatistics();
   const hasCritical = stats.failedAttempts > 0 || stats.revertedAttempts > 0;
+
+  if (!monitor.enabled) return null;
 
   return (
     <div

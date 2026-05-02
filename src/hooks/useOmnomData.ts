@@ -351,9 +351,10 @@ export function useOmnomData() {
 
   // Merge DexScreener pools with factory-scanned pools
   // DexScreener data is prioritized (has TVL, volume, price info)
-  const factoryPools = factoryScanQuery.data ?? [];
   const allPools = useMemo(() => {
-    const dexScreenerAddresses = new Set(pairs.map(p => p.pairAddress.toLowerCase()));
+    const dexPairs = dexQuery.data ?? [];
+    const factoryPools = factoryScanQuery.data ?? [];
+    const dexScreenerAddresses = new Set(dexPairs.map(p => p.pairAddress.toLowerCase()));
 
     // Add factory-scanned pools not in DexScreener
     const additionalPools = factoryPools
@@ -390,8 +391,8 @@ export function useOmnomData() {
         _creationBlock: undefined,
       } as DexPair & { _factoryScanned?: boolean; _category?: 'active' | 'abandoned'; _totalSupply?: string; _creationBlock?: number }));
 
-    return [...pairs, ...additionalPools];
-  }, [pairs, factoryPools]);
+    return [...dexPairs, ...additionalPools];
+  }, [dexQuery.data, factoryScanQuery.data]);
 
   // Primary pair = highest-liquidity OMNOM/WWDOGE pair (DexScreener sorts by liquidity)
   const primaryPair = allPools.length > 0

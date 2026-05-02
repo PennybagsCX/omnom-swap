@@ -127,7 +127,7 @@ export function useAutoSlippage(
       taxBuffer: Math.round(taxBuffer * 100) / 100,
       total,
     };
-  }, [priceImpact, hopCount, tradeSizeVsLiquidity, isThinPair, poolTvl, buyTax, sellTax]);
+  }, [priceImpact, hopCount, tradeSizeVsLiquidity, isThinPair, buyTax, sellTax]);
 
   const autoSlippage = breakdown.total.toFixed(2);
   const slippageBps = BigInt(Math.round(breakdown.total * 100));

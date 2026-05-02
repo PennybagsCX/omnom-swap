@@ -246,6 +246,6 @@ export async function scanEventLogsForOmnomPools(): Promise<EventPool[]> {
  */
 export function clearEventLogScannerCache(): void {
   cachedPools = null;
-  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* localStorage unavailable */ }
   console.log('[EventLogScanner] Cache cleared');
 }

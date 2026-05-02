@@ -290,6 +290,6 @@ export async function scanFactoriesForOmnomPools(): Promise<FactoryPool[]> {
 
 export function clearPoolScannerCache(): void {
   cachedPools = null;
-  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* localStorage unavailable */ }
   console.log('[PoolScanner] Cache cleared');
 }

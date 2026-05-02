@@ -138,9 +138,11 @@ export const createLogger = (context: string) => ({
  * Legacy log object for gradual migration
  * @deprecated Use createLogger() or logger directly instead
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const log = {
   debug: (...args: any[]) => logger.debug('Legacy', args.join(' ')),
   info: (...args: any[]) => logger.info('Legacy', args.join(' ')),
   error: (...args: any[]) => logger.error('Legacy', args.join(' ')),
   warn: (...args: any[]) => logger.warn('Legacy', args.join(' ')),
 };
+/* eslint-enable @typescript-eslint/no-explicit-any */

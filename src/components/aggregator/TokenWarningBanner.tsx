@@ -41,10 +41,16 @@ const SEVERITY_STYLES: Record<TokenTaxInfo['warningLevel'], {
     icon: 'text-red-400',
     badge: 'bg-red-500/20 text-red-400',
   },
+  critical: {
+    container: 'bg-red-600/10',
+    border: 'border-red-600/50',
+    icon: 'text-red-500',
+    badge: 'bg-red-600/25 text-red-500',
+  },
 };
 
 function getIcon(level: TokenTaxInfo['warningLevel']) {
-  if (level === 'danger') return ShieldX;
+  if (level === 'critical' || level === 'danger') return ShieldX;
   if (level === 'high') return ShieldAlert;
   if (level === 'medium' || level === 'low') return AlertTriangle;
   return Info;

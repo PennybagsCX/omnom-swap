@@ -5,6 +5,11 @@ export const NETWORK_INFO = {
   chainId: 2000,
   rpcUrl: import.meta.env.VITE_RPC_URL || 'https://rpc.dogechain.dog',
   blockExplorer: 'https://explorer.dogechain.dog',
+  fallbackRpcs: [
+    'https://rpc.dogechain.dog',
+    'https://dogechain.technology',
+    'https://dogechain.one',
+  ],
 }
 
 export const CONTRACTS = {
@@ -88,7 +93,7 @@ export const CONTRACT_REFERENCE: readonly { label: string; address: string; link
   { label: 'Bourbon Defi Factory', address: CONTRACTS.BOURBONSWAP_FACTORY },
   { label: 'BreadFactory Router', address: CONTRACTS.BREADFACTORY_ROUTER },
   { label: 'BreadFactory Factory', address: CONTRACTS.BREADFACTORY_FACTORY },
-  { label: 'OmnomSwap Aggregator', address: '0x88F81031b258A0Fb789AC8d3A8071533BFADeC14', link: 'address' },
+  { label: 'OmnomSwap Aggregator', address: '0xb6eae524325cc31bb0f3d9af7bb63b4dc991b58a', link: 'address' },
   { label: 'Protocol Treasury', address: '0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88', link: 'address' },
 ] as const;
 
@@ -258,7 +263,7 @@ export function isKnownDex(dexId: string): boolean {
 }
 
 // Human-readable names for supported DEXes (shown in LP modal warning)
-export const KNOWN_DEX_NAMES = ['DogeSwap', 'DogeShrk', 'WOJAK Finance', 'KibbleSwap', 'YodeSwap', 'FraxSwap', 'ToolSwap', 'DMUSK', 'IceCreamSwap', 'PupSwap', 'Bourbon Defi'] as const;
+export const KNOWN_DEX_NAMES = ['DogeSwap', 'DogeShrk', 'WOJAK Finance', 'KibbleSwap', 'YodeSwap', 'FraxSwap', 'ToolSwap', 'DMUSK', 'IceCreamSwap', 'PupSwap', 'Bourbon Defi', 'BreadFactory'] as const;
 
 // ─── DEX Display Name Resolution ───────────────────────────────────────────────
 
@@ -297,6 +302,11 @@ export const DEX_NAME_MAP: Record<string, string> = {
   pup:            'PupSwap',
   // Factory address (BreadFactory reports raw factory address as dexId)
   '0xbee74fa515808793dc283f3dd28720ada56baf17': 'BreadFactory',
+  // Unknown factory addresses returned by DexScreener (zero/near-zero activity)
+  '0xfc5f561aa36d4f85bfa9a89dbf058932223d43db': 'UniswapV2 (Generic)',
+  '0xa9e41f15c5c0ab45ef5aa1aa47956c247ae5a12e': 'MoonrockSwap',
+  '0x8b8cfd13ec09454e6440a4812ed306796a4fb3ee': 'Unknown DEX',
+  '0xac94d9c6d3b7960403e1e6e74b9f52a8dab56325': 'Unknown DEX',
 };
 
 // ─── Factory Address → DEX Name reverse lookup ────────────────────────────────
@@ -317,6 +327,11 @@ const FACTORY_TO_DEX_NAME: Record<string, string> = {
   [CONTRACTS.PUPSWAP_FACTORY.toLowerCase()]:       'PupSwap',
   [CONTRACTS.BOURBONSWAP_FACTORY.toLowerCase()]:   'Bourbon Defi',
   [CONTRACTS.BREADFACTORY_FACTORY.toLowerCase()]:   'BreadFactory',
+  // DexScreener-reported factories with zero/near-zero activity
+  '0xfc5f561aa36d4f85bfa9a89dbf058932223d43db': 'UniswapV2 (Generic)',
+  '0xa9e41f15c5c0ab45ef5aa1aa47956c247ae5a12e': 'MoonrockSwap',
+  '0x8b8cfd13ec09454e6440a4812ed306796a4fb3ee': 'Unknown DEX',
+  '0xac94d9c6d3b7960403e1e6e74b9f52a8dab56325': 'Unknown DEX',
 };
 
 // ─── Router Address → DEX Name reverse lookup ─────────────────────────────────
@@ -471,9 +486,9 @@ export const PAIR_ABI = parseAbi([
 
 // Deployed to Dogechain mainnet — 2026-05-01 (v6: all 12 routers, deadline validation)
 // NOTE: The previous deployment at 0x8F8f0e68... has been replaced by the new aggregator
-// at this address. All 12 routers (DogeSwap, DogeShrk, WOJAK, KibbleSwap, YodeSwap,
-// FraxSwap, ToolSwap, DMUSK, IceCreamSwap, PupSwap, Bourbon Defi, BreadFactory) are registered.
-export const OMNOMSWAP_AGGREGATOR_ADDRESS = '0x88F81031b258A0Fb789AC8d3A8071533BFADeC14' as `0x${string}`;
+// at this address. All 11 routers (DogeSwap, DogeShrk, WOJAK, KibbleSwap, YodeSwap,
+// FraxSwap, ToolSwap, DMUSK, IceCreamSwap, PupSwap, Bourbon Defi) are registered.
+export const OMNOMSWAP_AGGREGATOR_ADDRESS = '0xb6eae524325cc31bb0f3d9af7bb63b4dc991b58a' as `0x${string}`;
 
 /** Known on-chain state for the deployed aggregator (used as fallback when RPC reads fail). */
 export const AGGREGATOR_KNOWN_STATE = {
@@ -488,7 +503,7 @@ export const isAggregatorDeployed = (): boolean =>
 
 /** Get decimals for a token by its address, falling back to 18. */
 export function getTokenDecimals(tokenAddress: string): number {
-  const t = TOKENS.find((tok) => tok.address.toLowerCase() === tokenAddress.toLowerCase());
+  const t = TOKENS.find((tok) => tok && tok.address && tok.address.toLowerCase() === tokenAddress.toLowerCase());
   return t?.decimals ?? 18;
 }
 

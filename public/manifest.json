@@ -1,0 +1,35 @@
+{
+  "name": "OMNOM Swap",
+  "short_name": "OMNOM",
+  "description": "The Beast of Dogechain - Best DEX aggregator with multi-hop routing",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#6366f1",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/omnom.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/tokens/omnom.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["finance", "business"],
+  "shortcuts": [
+    {
+      "name": "Swap",
+      "short_name": "Swap",
+      "description": "Quick swap tokens",
+      "url": "/?action=swap",
+      "icons": [{ "src": "/omnom.png", "sizes": "512x512" }]
+    }
+  ]
+}

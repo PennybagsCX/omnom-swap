@@ -57,6 +57,9 @@ contract DeployAggregator is Script {
     /// @notice Bourbon Defi Router
     address constant BOURBONSWAP_ROUTER = 0x6B172911a5Af8C9Eb2B7759688204624CcC9b0Ee;
 
+    /// @notice BreadFactory Router
+    address constant BREADFACTORY_ROUTER = 0x270AB932F923813378cCac2853a2c391279ff0Ed;
+
     function run() external {
         // Read configuration from environment variables
         address treasury = vm.envAddress("TREASURY_ADDRESS");

@@ -625,8 +625,10 @@ contract OmnomSwapAggregatorTest is Test {
         aggregator.executeSwap(req);
     }
 
-    function test_Swap_RevertStepExceedsSwapAmount() public {
-        // step.amountIn != swapAmount (amountIn after fee) - exact match required
+    function test_Swap_StepAmountIgnoredForStep0() public {
+        // Step 0's amountIn is ignored — the contract uses swapAmount (computed
+        // from balance diff) to handle fee-on-transfer tokens correctly.
+        // A wrong step.amountIn should still succeed for step 0.
         address[] memory path = new address[](2);
         path[0] = address(tokenA);
         path[1] = address(tokenB);
@@ -635,7 +637,7 @@ contract OmnomSwapAggregatorTest is Test {
         steps[0] = OmnomSwapAggregator.SwapStep({
             router: address(router),
             path: path,
-            amountIn: SWAP_AMOUNT + 1, // does not match the swapAmount after fee
+            amountIn: SWAP_AMOUNT + 1, // deliberately wrong — ignored for step 0
             minAmountOut: 0
         });
 
@@ -650,7 +652,7 @@ contract OmnomSwapAggregatorTest is Test {
         });
 
         vm.prank(user);
-        vm.expectRevert("Step amount mismatch");
+        // Should NOT revert — step.amountIn is ignored for step 0
         aggregator.executeSwap(req);
     }
 

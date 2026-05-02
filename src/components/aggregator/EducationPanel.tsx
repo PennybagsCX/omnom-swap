@@ -83,9 +83,9 @@ export function EducationPanel() {
           <p className="text-on-surface-variant/80 border-t border-outline-variant/10 pt-2 mt-2">
             <strong className="text-yellow-400">⚠️ Known limitation:</strong> The aggregator only supports{' '}
             <strong className="text-white">exact-input</strong> swaps (you specify the amount to sell).
-            Exact-output swaps (specifying the amount to buy) are not supported. Additionally, the contract
-            uses <code className="text-white bg-surface-container-highest px-1">swapExactTokensForTokens</code>{' '}
-            for all swaps — native DOGE must be wrapped to WWDOGE first.
+            Exact-output swaps (specifying the amount to buy) are not supported. The contract
+            uses <code className="text-white bg-surface-container-highest px-1">swapExactTokensForTokensSupportingFeeOnTransferTokens</code>{' '}
+            for all swaps, which handles fee-on-transfer tokens correctly — native DOGE must be wrapped to WWDOGE first.
           </p>
         </div>
       ),
@@ -104,7 +104,7 @@ export function EducationPanel() {
           <p>
             <strong className="text-white">Slippage tolerance</strong> is the maximum acceptable difference.
             If the actual output would be less than (expected output × (1 - slippage%)), the transaction
-            will revert.
+            may revert.
           </p>
           <p>
             <strong className="text-white">How to set it:</strong>
@@ -208,10 +208,11 @@ export function EducationPanel() {
             provides more protection but may cause more failed transactions.
           </p>
           <p>
-            <strong className="text-white">Why exact-amount approvals are safer:</strong> OmnomSwap
-            approves only the exact swap amount (plus a tiny 0.1% buffer) rather than unlimited token
-            allowances. This means if the aggregator contract were ever compromised, the attacker could
-            only access the tokens approved for the current swap — not your entire balance.
+            <strong className="text-white">Why unlimited approvals are standard:</strong> OmnomSwap
+            approves an unlimited allowance (uint256 max) for the aggregator contract, the same pattern
+            used by all major DEXes (Uniswap, 1inch, SushiSwap). This means subsequent swaps only require
+            one wallet confirmation instead of two. You can revoke approval at any time via the block explorer
+            or token approval management tools.
           </p>
           <p className="text-yellow-400 border-t border-outline-variant/10 pt-2 mt-2">
             ⚠️ <strong>Dogechain currently has no MEV protection infrastructure</strong> (no Flashbots,

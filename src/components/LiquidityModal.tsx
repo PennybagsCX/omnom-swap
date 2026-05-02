@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount, useChainId } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { X, Droplets, Loader2, AlertTriangle } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
   computeWithdrawAmounts,
   useTokenDecimals,
 } from '../hooks/useLiquidity';
+import { useGasEstimate } from '../hooks/useGasEstimate';
 import { formatCompactAmount } from '../lib/format';
 
 // BigInt-based ratio for precise amount calculation (avoids floating-point precision loss)
@@ -76,6 +77,13 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
     ? (CONTRACTS.DOGESWAP_V2_ROUTER as `0x${string}`)
     : dexRouter;
 
+  // Gas estimation for WWDOGE pairs
+  const { estimateLiquidityGas } = useGasEstimate();
+  const [gasEstimate, setGasEstimate] = useState<{ cost: bigint; isLoading: boolean }>({
+    cost: 0n,
+    isLoading: false,
+  });
+
   // Token balances — also reads native DOGE if token is WWDOGE
   const { balanceA: rawBalA, balanceB: rawBalB, nativeBalance, isLoading: isLoadingBalances } = useErc20Balances(
     token0 as string | undefined,
@@ -92,9 +100,16 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const rawBalANum = !isConnected ? 0 : rawBalA ? Number(formatUnits(rawBalA, decimals0)) : 0;
   const rawBalBNum = !isConnected ? 0 : rawBalB ? Number(formatUnits(rawBalB, decimals1)) : 0;
   const nativeDoge = !isConnected ? 0 : Number(formatUnits(nativeBalance, 18));
+
+  // Calculate gas cost for WWDOGE pairs
+  const gasCostDoge = !isConnected ? 0 : Number(formatUnits(gasEstimate.cost, 18));
+  // For WWDOGE: deduct estimated gas cost from native balance
+  const availableNativeForWrap = Math.max(0, nativeDoge - gasCostDoge);
+
   // Swap page uses native DOGE balance for WWDOGE — match that behavior here
-  const balanceA = isToken0WWDOGE ? nativeDoge : rawBalANum;
-  const balanceB = isToken1WWDOGE ? nativeDoge : rawBalBNum;
+  // NOW: accounts for estimated gas cost when displaying WWDOGE balance
+  const balanceA = isToken0WWDOGE ? availableNativeForWrap : rawBalANum;
+  const balanceB = isToken1WWDOGE ? availableNativeForWrap : rawBalBNum;
 
   // Actions
   const { addLiquidity } = useAddLiquidity();
@@ -112,6 +127,17 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
   // Transaction state
   const [isPending, setIsPending] = useState(false);
+
+  // Track previous values to avoid unnecessary re-runs
+  const prevValuesRef = useRef<{
+    amountA: string;
+    amountB: string;
+    parsedA: number;
+    parsedB: number;
+  }>({ amountA: '', amountB: '', parsedA: 0, parsedB: 0 });
+
+  // Track the latest gas estimation request for cleanup
+  const gasEstimateRef = useRef<{ mounted: boolean; requestId: number }>({ mounted: true, requestId: 0 });
 
   // Reset state on open/mode change
   useEffect(() => {
@@ -141,7 +167,7 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
         try {
           const amountABigInt = parseUnits(val, decimals0);
           const amountBWei = (amountABigInt * ratioX96) / RATIO_SCALE;
-          setAmountB(formatUnits(amountBWei, decimals1).replace(/\.?0+$/, ''));
+          setAmountB(formatUnits(amountBWei, decimals1).replace(/\.0+$/, ''));
         } catch {
           setAmountB('');
         }
@@ -174,13 +200,116 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const parsedA = parseFloat(amountA) || 0;
   const parsedB = parseFloat(amountB) || 0;
   const balancesLoaded = !isLoadingBalances;
-  // Auto-wrap: native DOGE can cover WWDOGE deficit (reserve 2 DOGE for gas)
-  const gasReserve = 2;
-  const availableNativeForWrap = Math.max(0, nativeDoge - gasReserve);
+  // Dynamic gas estimation: use actual estimated gas cost instead of hardcoded reserve
   const insufficientBalance = balancesLoaded && isConnected && (
     (isToken0WWDOGE ? parsedA > availableNativeForWrap : parsedA > rawBalANum) ||
     (isToken1WWDOGE ? parsedB > availableNativeForWrap : parsedB > rawBalBNum)
   );
+
+  // Gas estimation for WWDOGE pairs - runs when amounts change
+  // Includes proper cleanup to cancel in-flight requests
+  useEffect(() => {
+    // Only estimate gas for WWDOGE pairs when user has entered amounts
+    if (!address || !token0 || !token1 || parsedA <= 0 || parsedB <= 0) {
+      setGasEstimate({ cost: 0n, isLoading: false });
+      return;
+    }
+
+    // Only need gas estimation for WWDOGE pairs
+    if (!isToken0WWDOGE && !isToken1WWDOGE) {
+      setGasEstimate({ cost: 0n, isLoading: false });
+      return;
+    }
+
+    // Skip if values haven't meaningfully changed (within 1% to avoid rounding noise)
+    const prev = prevValuesRef.current;
+    const amountChanged = prev.amountA !== amountA || prev.amountB !== amountB;
+    const significantChange = amountChanged && (
+      Math.abs(parsedA - prev.parsedA) / Math.max(prev.parsedA, 1) > 0.01 ||
+      Math.abs(parsedB - prev.parsedB) / Math.max(prev.parsedB, 1) > 0.01
+    );
+
+    if (!significantChange && amountChanged) {
+      // Amounts changed but within 1% — skip re-estimation
+      return;
+    }
+
+    const estimateGas = async () => {
+      // Update ref with current values
+      prevValuesRef.current = { amountA, amountB, parsedA, parsedB };
+
+      // Increment request ID for tracking
+      const currentRequestId = ++gasEstimateRef.current.requestId;
+
+      setGasEstimate(prev => ({ ...prev, isLoading: true }));
+
+      const amountADesired = parseUnits(amountA || '0', decimals0);
+      const amountBDesired = parseUnits(amountB || '0', decimals1);
+      const slippageBpsInt = BigInt(Math.floor(parsedSlippage * 100));
+      const basisPoints = 10000n;
+
+      // Build the args for addLiquidity call
+      const txDeadline = Math.floor(Date.now() / 1000) + (parseInt(deadline) || 20) * 60;
+      const amountAMin = (amountADesired * (basisPoints - slippageBpsInt)) / basisPoints;
+      const amountBMin = (amountBDesired * (basisPoints - slippageBpsInt)) / basisPoints;
+
+      // Use UniswapV2Router02 ABI for gas estimation
+      const routerAbi = [
+        {
+          type: 'function',
+          name: 'addLiquidity',
+          stateMutability: 'payable',
+          inputs: [
+            { name: 'tokenA', type: 'address' },
+            { name: 'tokenB', type: 'address' },
+            { name: 'amountADesired', type: 'uint256' },
+            { name: 'amountBDesired', type: 'uint256' },
+            { name: 'amountAMin', type: 'uint256' },
+            { name: 'amountBMin', type: 'uint256' },
+            { name: 'to', type: 'address' },
+            { name: 'deadline', type: 'uint256' },
+          ],
+          outputs: [{ name: 'amountA', type: 'uint256' }, { name: 'amountB', type: 'uint256' }, { name: 'liquidity', type: 'uint256' }],
+        },
+      ];
+
+      try {
+        const result = await estimateLiquidityGas(
+          routerAddress,
+          'addLiquidity',
+          [token0, token1, amountADesired, amountBDesired, amountAMin, amountBMin, address, BigInt(txDeadline)],
+          routerAbi,
+        );
+
+        // Only update state if this is still the latest request and component is mounted
+        if (gasEstimateRef.current.mounted && gasEstimateRef.current.requestId === currentRequestId) {
+          setGasEstimate({ cost: result.gasCost, isLoading: false });
+        }
+      } catch (err) {
+        // Only update state if this is still the latest request and component is mounted
+        if (gasEstimateRef.current.mounted && gasEstimateRef.current.requestId === currentRequestId) {
+          console.error('[LiquidityModal] Gas estimation failed:', err);
+          // On failure, don't show gas cost but don't block the user
+          setGasEstimate({ cost: 0n, isLoading: false });
+        }
+      }
+    };
+
+    estimateGas();
+
+    // Cleanup function: cancel in-flight requests when component unmounts or dependencies change
+    return () => {
+      // The hook's internal AbortController will handle cancellation
+      // This just marks the component as unmounted for this specific request cycle
+    };
+  }, [amountA, amountB, token0, token1, routerAddress, slippage, deadline, address, decimals0, decimals1, parsedSlippage, parsedA, parsedB, isToken0WWDOGE, isToken1WWDOGE, estimateLiquidityGas]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      gasEstimateRef.current.mounted = false;
+    };
+  }, []);
 
   // Withdraw calculations
   const withdrawAmounts = lpBalance > 0n && totalSupply > 0n && reserve0 > 0n
@@ -251,8 +380,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   // V3 pools can't do LP in Phase 1
   if (isV3) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-        <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6 my-auto" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-headline font-black text-xl uppercase tracking-tighter text-white">{poolName}</h2>
             <button onClick={onClose} className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
@@ -275,8 +404,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const isUnknownDex = !isKnownDex(dexId);
   if (isUnknownDex) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-        <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6 my-auto" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-headline font-black text-xl uppercase tracking-tighter text-white">{poolName}</h2>
             <button onClick={onClose} className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
@@ -302,8 +431,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
   const symB = symbol1 || tokenSymbol(token1);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}>
-      <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] flex flex-col max-h-[80vh] my-auto" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget && !isPending) onClose(); }}>
+      <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] flex flex-col max-h-[90vh] overflow-y-auto custom-scrollbar my-auto" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-outline-variant/15 shrink-0">
           <div className="flex items-center gap-3">
@@ -619,8 +748,8 @@ export function LiquidityModal({ isOpen, onClose, mode, pairAddress, poolName, d
 
       {/* Remove LP confirmation overlay */}
       {showRemoveConfirm && !isPending && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center pt-20 pb-4 px-4 bg-black/70 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget) setShowRemoveConfirm(false); }}>
-          <div className="bg-surface-container-low border border-secondary/30 w-full max-w-sm shadow-[0_0_50px_rgba(157,0,255,0.15)] p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowRemoveConfirm(false); }}>
+          <div className="bg-surface-container-low border border-secondary/30 w-full max-w-sm shadow-[0_0_50px_rgba(157,0,255,0.15)] p-6 my-auto" onClick={e => e.stopPropagation()}>
             <h3 className="font-headline font-black text-xl uppercase tracking-tighter text-white mb-4 border-b border-outline-variant/15 pb-3">Confirm Withdrawal</h3>
 
             <div className="space-y-3 mb-6">

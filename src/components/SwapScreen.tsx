@@ -426,9 +426,6 @@ const [sellAmount, setSellAmount] = useState<string>('');
   } else if (exchangeRate <= 0) {
     buttonText = "NO LIQUIDITY";
     isDisabled = true;
-  } else if (priceImpact >= PRICE_IMPACT_BLOCK) {
-    buttonText = "PRICE IMPACT TOO HIGH";
-    isDisabled = true;
   }
 
   const handleExecuteAction = () => {
@@ -1149,8 +1146,8 @@ const [sellAmount, setSellAmount] = useState<string>('');
 
       {/* Confirmation modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center pt-20 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto custom-scrollbar" onClick={(e) => { if (e.target === e.currentTarget && !isSwapping) setShowConfirmModal(false); }}>
-          <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget && !isSwapping) setShowConfirmModal(false); }}>
+          <div className="bg-surface-container-low border border-primary/30 w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.15)] p-6 max-h-[90vh] overflow-y-auto custom-scrollbar my-auto" onClick={e => e.stopPropagation()}>
             {isSwapping ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="relative w-24 h-24 mb-6">

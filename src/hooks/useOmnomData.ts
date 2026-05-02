@@ -18,9 +18,10 @@
  * Only used for price/volume stats, not trades.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { CONTRACTS, OMNOM_WWDOGE_POOL } from '../lib/constants';
+import { scanFactoriesForOmnomPools } from '../services/poolScanner';
 
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens';
 const STATS_STALE_MS = 60_000; // 1 min — DexScreener has no rate limits
@@ -247,6 +248,25 @@ async function fetchGeckoTradesWithRetry(
   }
 }
 
+// ── Token Symbol Resolution ──────────────────────────────────────────────────
+
+const KNOWN_TOKEN_SYMBOLS: Record<string, string> = {
+  [CONTRACTS.OMNOM_TOKEN]: 'OMNOM',
+  [CONTRACTS.WWDOGE]: 'WWDOGE',
+  '0x66cfd94e31c78fa2af09cbad615e0708487fcbf': 'USDT',
+  '0xc21223249cc284701f197ec09bf8d3293ed5c8ec': 'USDC',
+  '0x0cdcfe2b9f49f8c26e09448e628408a6a6788228': 'DAI',
+  '0x4fccd7e581ab84255f301efe36db397a5a4e293b': 'MCRIB',
+  '0x90d768f0a6ebb8ffcabe89b0313b34265bc3f54a': 'DC',
+  '0x9d3454387855c768499943c020c5705b2544151c': 'USDO',
+  '0x3593acb873e91c781d4e27c4a9a36de15b033896': 'oneD',
+};
+
+function resolveTokenSymbol(address: string): string {
+  if (!address) return 'Unknown';
+  return KNOWN_TOKEN_SYMBOLS[address.toLowerCase()] || `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 // ── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface DexPair {
@@ -319,9 +339,63 @@ export function useOmnomData() {
 
   const pairs = dexQuery.data ?? [];
 
+  // ── Factory Scanner Query ───────────────────────────────────────────────────────
+  // Scan DEX factories to find pools DexScreener misses (e.g., USDO/OMNOM with $32 TVL)
+  // This ensures ALL active OMNOM pools appear on the Pools page
+  const factoryScanQuery = useQuery({
+    queryKey: ['omnomFactoryScan'],
+    queryFn: scanFactoriesForOmnomPools,
+    staleTime: 5 * 60 * 1000, // 5 minutes — matches scanner cache TTL
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  // Merge DexScreener pools with factory-scanned pools
+  // DexScreener data is prioritized (has TVL, volume, price info)
+  const factoryPools = factoryScanQuery.data ?? [];
+  const allPools = useMemo(() => {
+    const dexScreenerAddresses = new Set(pairs.map(p => p.pairAddress.toLowerCase()));
+
+    // Add factory-scanned pools not in DexScreener
+    const additionalPools = factoryPools
+      .filter(fp => !dexScreenerAddresses.has(fp.pairAddress.toLowerCase()))
+      .map(fp => ({
+        // Build minimal DexPair structure for factory-scanned pools
+        pairAddress: fp.pairAddress,
+        dexId: fp.dexId,
+        chainId: 'dogechain',
+        url: `https://dexscreener.com/dogechain/${fp.dexId}/${fp.pairAddress}`,
+        baseToken: {
+          address: fp.token0,
+          symbol: fp.token0Symbol || resolveTokenSymbol(fp.token0),
+          name: fp.token0Symbol || resolveTokenSymbol(fp.token0),
+        },
+        quoteToken: {
+          address: fp.token1,
+          symbol: fp.token1Symbol || resolveTokenSymbol(fp.token1),
+          name: fp.token1Symbol || resolveTokenSymbol(fp.token1),
+        },
+        priceUsd: '0', // Will need price fetch for accuracy
+        priceNative: '0',
+        liquidity: {
+          usd: 0, // Would need on-chain price calculation
+          base: fp.reserve0 ? Number(fp.reserve0) : 0,
+          quote: fp.reserve1 ? Number(fp.reserve1) : 0,
+        },
+        volume: { h24: 0, h6: 0, h1: 0, m5: 0 },
+        txns: { h24: { buys: 0, sells: 0 } },
+        // Factory scanner metadata
+        _factoryScanned: true,
+        _category: fp.category,
+        _totalSupply: fp.totalSupply?.toString() || '0',
+        _creationBlock: undefined,
+      } as DexPair & { _factoryScanned?: boolean; _category?: 'active' | 'abandoned'; _totalSupply?: string; _creationBlock?: number }));
+
+    return [...pairs, ...additionalPools];
+  }, [pairs, factoryPools]);
+
   // Primary pair = highest-liquidity OMNOM/WWDOGE pair (DexScreener sorts by liquidity)
-  const primaryPair = pairs.length > 0
-    ? (pairs.find(p => p.quoteToken?.symbol === 'WWDOGE') ?? pairs[0])
+  const primaryPair = allPools.length > 0
+    ? (allPools.find(p => p.quoteToken?.symbol === 'WWDOGE' || p.baseToken?.symbol === 'WWDOGE') ?? allPools[0])
     : undefined;
 
   // ── GeckoTerminal Trades Query (PRIMARY trades source) ─────────────────────
@@ -456,13 +530,13 @@ export function useOmnomData() {
 
   // ── Loading State ────────────────────────────────────────────────────────────
 
-  const isLoading = dexQuery.isLoading;
+  const isLoading = dexQuery.isLoading || factoryScanQuery.isLoading;
   const isTradesLoading = geckoTradesQuery.isLoading;
 
   return {
-    allPools: pairs,
+    allPools,
     trades: allTrades,
-    poolCount: pairs.length,
+    poolCount: allPools.length,
 
     // Price (from primary pair)
     priceUsd, fdvUsd, marketCapUsd, priceChange24,
@@ -483,7 +557,8 @@ export function useOmnomData() {
     // Loading states
     isLoading,
     isTradesLoading,
-    isPoolsListLoading: dexQuery.isLoading,
+    isPoolsListLoading: dexQuery.isLoading || factoryScanQuery.isLoading,
+    isFactoryScanning: factoryScanQuery.isLoading,
 
     // GeckoTerminal state
     isGeckoLoading: geckoTradesQuery.isLoading,

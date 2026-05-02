@@ -133,6 +133,32 @@ contract MockUniswapV2Router {
     }
 
     /**
+     * @notice Fee-on-transfer variant: same as swapExactTokensForTokens but no return value.
+     */
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external {
+        // solhint-disable-next-line not-rely-on-time
+        require(block.timestamp <= deadline, "Expired");
+
+        address tokenIn = path[0];
+        address tokenOut = path[path.length - 1];
+
+        uint256 amountOut = (amountIn * exchangeRate) / 1e18;
+        require(amountOut >= amountOutMin, "Insufficient output");
+
+        _transferIn(tokenIn, msg.sender, amountIn);
+        require(
+            IERC20(tokenOut).transfer(to, amountOut),
+            "Transfer out failed"
+        );
+    }
+
+    /**
      * @notice Updates the exchange rate for testing different scenarios.
      * @param _exchangeRate The new exchange rate (scaled by 1e18).
      */

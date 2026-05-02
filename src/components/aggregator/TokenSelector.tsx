@@ -142,32 +142,46 @@ export function TokenSelector({ isOpen, onClose, onSelect, selectedToken, side, 
   // Search results across ALL tokens (including custom tokens)
   const searchResults = useMemo(() => {
     if (!searchQuery) return [];
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.replace(/^\$+/, '').toLowerCase();
     const results: TokenType[] = [];
+    const seenAddresses = new Set<string>();
+
+    const addToken = (t: TokenType) => {
+      const addr = t.address.toLowerCase();
+      if (seenAddresses.has(addr)) return;
+      seenAddresses.add(addr);
+      results.push(t);
+    };
 
     // Search in main token list (by symbol, name, or address)
     for (const t of TOKENS) {
       if (t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || t.address.toLowerCase().includes(q)) {
-        results.push(t);
+        addToken(t);
+      }
+    }
+
+    // IMPORTANT: Also search in POPULAR_TOKENS to ensure DC, DINU, etc. are always searchable
+    // even if they're not in the main TOKENS array
+    for (const addr of POPULAR_TOKENS) {
+      const token = TOKENS.find(t => t.address.toLowerCase() === addr);
+      if (token && (token.symbol.toLowerCase().includes(q) || token.name.toLowerCase().includes(q) || addr.includes(q))) {
+        addToken(token);
       }
     }
 
     // Search in custom tokens
     for (const t of customTokens) {
       if (t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || t.address.toLowerCase().includes(q)) {
-        // Check if not already in results
-        if (!results.some(r => r.address.toLowerCase() === t.address.toLowerCase())) {
-          results.push({
-            symbol: t.symbol,
-            name: t.name,
-            decimals: t.decimals,
-            address: t.address,
-            balance: t.balance,
-            icon: t.icon || '',
-            isImage: t.isImage || false,
-            isNative: t.isNative || false,
-          });
-        }
+        addToken({
+          symbol: t.symbol,
+          name: t.name,
+          decimals: t.decimals,
+          address: t.address,
+          balance: t.balance,
+          icon: t.icon || '',
+          isImage: t.isImage || false,
+          isNative: t.isNative || false,
+        });
       }
     }
 

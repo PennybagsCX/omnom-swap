@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ExternalLink, Droplets, PawPrint, AlertTriangle, Plus, Minus } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { ExternalLink, Droplets, PawPrint, AlertTriangle, Plus, Minus, Filter } from 'lucide-react';
 import { NETWORK_INFO, calcPriceImpact, impactColor, resolveDexName } from '../lib/constants';
 import { useOmnomData, type DexPair } from '../hooks/useOmnomData';
 import { useNewPairMonitor } from '../hooks/useNewPairMonitor';
@@ -9,6 +9,14 @@ import { formatCompactPrice } from '../lib/format';
 const fmtUsd = formatCompactPrice;
 
 const LOW_TVL_THRESHOLD = 500; // Pools below $500 TVL flagged as low-liquidity
+
+type PoolCategory = 'all' | 'active' | 'abandoned';
+
+const CATEGORY_CONFIG: Record<PoolCategory, { label: string; color: string; bgColor: string; borderColor: string }> = {
+  all: { label: 'All', color: 'text-white', bgColor: 'bg-surface-container-low', borderColor: 'border-outline-variant/30' },
+  active: { label: 'Active', color: 'text-green-400', bgColor: 'bg-green-900/20', borderColor: 'border-green-500/30' },
+  abandoned: { label: 'Abandoned', color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/30' },
+};
 
 function pctChange(val: number | undefined | null): { text: string; color: string } {
   if (val == null) return { text: '\u2014', color: 'text-on-surface-variant' };
@@ -27,6 +35,24 @@ export function PoolsScreen() {
     isPoolsListLoading, poolsListError,
   } = useOmnomData();
 
+  // Category filter state
+  const [categoryFilter, setCategoryFilter] = useState<PoolCategory>('all');
+
+  // Filter pools by category
+  const filteredPools = useMemo(() => {
+    if (categoryFilter === 'all') return allPools as DexPair[];
+    return (allPools as DexPair[]).filter(pool => {
+      const category = (pool as DexPair & { _category?: 'active' | 'abandoned' })._category;
+      if (!category) {
+        // Default: pools with TVL > 0 are active
+        return categoryFilter === 'active' && (pool.liquidity?.usd || 0) > 0;
+      }
+      return category === categoryFilter;
+    });
+  }, [allPools, categoryFilter]);
+
+  const pools = filteredPools;
+
   const [lpModal, setLpModal] = useState<{
     open: boolean;
     mode: 'add' | 'remove';
@@ -44,7 +70,6 @@ export function PoolsScreen() {
     setLpModal(prev => ({ ...prev, open: false }));
   };
 
-  const pools = allPools as DexPair[];
   const isRateLimited = !!poolsListError;
   const txns24Total = totalTxns24 ? totalTxns24.buys + totalTxns24.sells : null;
   const hasError = !!poolsListError;
@@ -78,6 +103,35 @@ export function PoolsScreen() {
         <div className="bg-surface-container-low p-4 border-l-2 border-outline-variant text-center flex flex-col items-center justify-center">
           <p className="text-[10px] font-headline uppercase text-on-surface-variant mb-1">On-Chain Pools</p>
           <p className="font-headline font-bold text-white text-xl">{poolCount ? poolCount : '\u2014'}</p>
+        </div>
+      </div>
+
+      {/* Category filter toggle */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-on-surface-variant" />
+          <span className="text-[10px] font-headline uppercase text-on-surface-variant tracking-widest">Filter by Status</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(CATEGORY_CONFIG) as PoolCategory[]).map(cat => {
+            const config = CATEGORY_CONFIG[cat];
+            const isActive = categoryFilter === cat;
+            const count = cat === 'all' ? poolCount : (allPools as DexPair[]).filter(p => {
+              const category = (p as DexPair & { _category?: 'active' | 'abandoned' })._category;
+              if (!category) return cat === 'active' && (p.liquidity?.usd || 0) > 0;
+              return category === cat;
+            }).length;
+
+            return (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={`px-3 py-1.5 text-[10px] font-headline font-bold uppercase tracking-wider border transition-all ${isActive ? config.color + ' ' + config.bgColor + ' ' + config.borderColor : 'text-on-surface-variant bg-surface-container-low border-outline-variant/30 hover:border-outline-variant'}`}
+              >
+                {config.label} ({count})
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -126,12 +180,23 @@ export function PoolsScreen() {
               const price = parseFloat(pool.priceUsd || '0');
               const poolName = `${pool.baseToken?.symbol || '?'}/${pool.quoteToken?.symbol || '?'}`;
               const refImpact = tvl > 0 ? calcPriceImpact(100, tvl / 2) : 0;
+              const poolCategory = (pool as DexPair & { _category?: 'active' | 'abandoned' })._category;
 
               return (
                 <div key={pool.pairAddress} className={`bg-surface-container-low border border-outline-variant/15 p-4 ${i === 0 ? 'border-l-4 border-l-primary bg-primary/5' : ''}`}>
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {i === 0 && <span className="text-[8px] font-headline font-bold text-primary bg-primary/10 border border-primary/20 px-1">PRIMARY</span>}
+                      {(() => {
+                        const badge = poolCategory || (tvl > 0 ? 'active' : null);
+                        if (!badge) return null;
+                        const cfg = CATEGORY_CONFIG[badge as 'active' | 'abandoned' | 'all'];
+                        return (
+                          <span className={`text-[8px] font-headline font-bold px-1 ${cfg.color} ${cfg.bgColor} border ${cfg.borderColor}`}>
+                            {badge.toUpperCase()}
+                          </span>
+                        );
+                      })()}
                       <span className="font-headline font-bold text-white text-sm">{poolName}</span>
                       {tvl > 0 && tvl < LOW_TVL_THRESHOLD && (
                         <span className="relative group">
@@ -232,12 +297,23 @@ export function PoolsScreen() {
                   const price = parseFloat(pool.priceUsd || '0');
                   const poolName = `${pool.baseToken?.symbol || '?'}/${pool.quoteToken?.symbol || '?'}`;
                   const refImpact = tvl > 0 ? calcPriceImpact(100, tvl / 2) : 0;
+                  const poolCategory = (pool as DexPair & { _category?: 'active' | 'abandoned' })._category;
 
                   return (
                     <tr key={pool.pairAddress} className={`border-b border-outline-variant/5 hover:bg-surface-container-high transition-colors ${i === 0 ? 'bg-primary/5' : ''}`}>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {i === 0 && <span className="text-[8px] font-headline font-bold text-primary bg-primary/10 border border-primary/20 px-1">PRIMARY</span>}
+                          {(() => {
+                            const badge = poolCategory || (tvl > 0 ? 'active' : null);
+                            if (!badge) return null;
+                            const cfg = CATEGORY_CONFIG[badge as 'active' | 'abandoned' | 'all'];
+                            return (
+                              <span className={`text-[8px] font-headline font-bold px-1 ${cfg.color} ${cfg.bgColor} border ${cfg.borderColor}`}>
+                                {badge.toUpperCase()}
+                              </span>
+                            );
+                          })()}
                           <span className="font-headline font-bold text-white text-sm">{poolName}</span>
                           {tvl > 0 && tvl < LOW_TVL_THRESHOLD && (
                             <span className="relative group/liq">

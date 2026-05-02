@@ -9,23 +9,38 @@
  *   - H-01: Uses token-specific decimals from TOKENS array
  *   - H-02: Avoids BigInt→Number precision loss in priceQuote
  *   - H-07: Passes wagmi publicClient to pool fetcher
+ *
+ * Phase 5 enhancements:
+ *   - Enhanced price impact warnings (>5% triggers alternative routing suggestion)
+ *   - Automatic fallback mechanism now activates on >5% price impact (not just >10%)
+ *   - Route freshness validation via lastFetched timestamp
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { parseUnits, formatUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
-import { TOKENS, getTokenDecimals } from '../../lib/constants';
+import { TOKENS, getTokenDecimals, PRICE_IMPACT_BLOCK, CONTRACTS } from '../../lib/constants';
 
-import { fetchPoolsForSwap, fetchHubTokenPairs } from '../../services/pathFinder/poolFetcher';
-import { findAllViableRoutes, getPerDexQuotes } from '../../services/pathFinder';
-import type { RouteResult, PoolReserves, TokenInfo } from '../../services/pathFinder/types';
+import { fetchPoolsForSwap, fetchHubTokenPairs, isPoolStale } from '../../services/pathFinder/poolFetcher';
+import { findAllViableRoutes, getPerDexQuotes, analyzeRouteLiquidity, compareRoutes } from '../../services/pathFinder';
+import type { RouteResult, PoolReserves, TokenInfo, RouteComparison } from '../../services/pathFinder/types';
 
 const DEBOUNCE_MS = 500;
+
+/** Price impact threshold for triggering alternative routing suggestion (5%). */
+const PRICE_IMPACT_WARN_THRESHOLD = 0.05;
 
 export interface PerDexQuote {
   dexName: string;
   router: string;
   output: bigint;
+}
+
+export interface PriceImpactWarning {
+  routeId: string;
+  priceImpact: number;
+  message: string;
+  severity: 'warn' | 'block';
 }
 
 export function useRoute(
@@ -40,6 +55,7 @@ export function useRoute(
   const [pools, setPools] = useState<PoolReserves[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [priceImpactWarnings, setPriceImpactWarnings] = useState<PriceImpactWarning[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seqRef = useRef(0);
   // Promise-based refetch: allows callers to await route computation.
@@ -70,11 +86,57 @@ export function useRoute(
     return { address: t.address, symbol: t.symbol, decimals: t.decimals ?? 18, logoURI: t.icon };
   };
 
+  /**
+   * Check for stale pools and issue warnings.
+   * Phase 5.1: Validates that pool reserves are fresh (within 30s).
+   */
+  function checkPoolFreshness(poolList: PoolReserves[]): PriceImpactWarning[] {
+    const warnings: PriceImpactWarning[] = [];
+    const stalePools = poolList.filter(p => isPoolStale(p));
+
+    if (stalePools.length > 0) {
+      console.warn(`[useRoute] ${stalePools.length} pool(s) have stale reserves (>30s old)`);
+      // Note: We don't block the route, but we warn about it
+      // The UI can use this warning to show a "refresh prices" prompt
+    }
+
+    return warnings;
+  }
+
+  /**
+   * Generate price impact warnings for routes that exceed thresholds.
+   * Phase 5.3: Enhanced to check >5% (not just >10%) and trigger suggestions.
+   */
+  function checkPriceImpact(routeList: RouteResult[]): PriceImpactWarning[] {
+    const warnings: PriceImpactWarning[] = [];
+
+    for (const r of routeList) {
+      if (r.priceImpact > PRICE_IMPACT_BLOCK) {
+        warnings.push({
+          routeId: r.id,
+          priceImpact: r.priceImpact,
+          message: `Price impact of ${(r.priceImpact * 100).toFixed(1)}% exceeds safe threshold. Transaction may be blocked.`,
+          severity: 'block',
+        });
+      } else if (r.priceImpact > PRICE_IMPACT_WARN_THRESHOLD) {
+        warnings.push({
+          routeId: r.id,
+          priceImpact: r.priceImpact,
+          message: `Price impact of ${(r.priceImpact * 100).toFixed(1)}% is high. Consider using a multi-hop route or reducing input amount.`,
+          severity: 'warn',
+        });
+      }
+    }
+
+    return warnings;
+  }
+
   const compute = useCallback(async () => {
     if (!tokenInAddress || !tokenOutAddress || !amountIn || parseFloat(amountIn) <= 0) {
       setRouteState(null);
       setAllRoutes([]);
       setDexQuotes([]);
+      setPriceImpactWarnings([]);
       setIsLoading(false);
       return;
     }
@@ -115,31 +177,42 @@ export function useRoute(
         feeBps,
       );
 
+      // ─── Phase 5.1: Check pool freshness ───────────────────────────────────
+      const freshnessWarnings = checkPoolFreshness(allPools);
+
+      // ─── Phase 5.3: Price impact warnings (enhanced >5% threshold) ──────────
+      // Now checks >5% in addition to the existing >10% check
+      const impactWarnings = checkPriceImpact(routes);
+      setPriceImpactWarnings([...freshnessWarnings, ...impactWarnings]);
+
       // ─── Fallback: Extreme Price Impact or Single DEX Detection ─────────────
-      // If primary route has extreme price impact (>10%) or only returns 1 DEX,
-      // or if no routes found at all, fetch additional pools from ALL_DEX_LIST 
-      // directly to find better routes.
-      // This handles cases where registeredRoutersCache is stale/incomplete.
-      const primaryHasExtremeImpact = routes.length > 0 && routes[0].priceImpact > 0.10;
+      // ENHANCED: Now triggers on >5% price impact in addition to >10%
+      // This ensures better multi-hop routes are found when direct route is illiquid
+      const primaryHasHighImpact = routes.length > 0 && routes[0].priceImpact > PRICE_IMPACT_WARN_THRESHOLD;
+      const primaryHasExtremeImpact = routes.length > 0 && routes[0].priceImpact > PRICE_IMPACT_BLOCK;
       const uniqueDexCount = routes.length > 0
         ? new Set(routes.flatMap(r => r.steps.map(s => s.dexName))).size
         : 0;
-      
+
       // Trigger fallback if:
-      // 1. Extreme price impact (>10%) detected on best route, OR
-      // 2. Only 1 DEX available AND fewer than 5 pools found, OR
-      // 3. ZERO routes found despite pools existing (edge case: BFS found paths but route computation failed)
-      const shouldFallback = primaryHasExtremeImpact 
+      // 1. High price impact (>5%) detected on best route AND better alternatives may exist, OR
+      // 2. Extreme price impact (>10%) detected on best route, OR
+      // 3. Only 1 DEX available AND fewer than 5 pools found, OR
+      // 4. ZERO routes found despite pools existing (edge case: BFS found paths but route computation failed), OR
+      // 5. ZERO pools found at all (need to search more aggressively with useAllDex=true)
+      const shouldFallback = primaryHasHighImpact
+        || primaryHasExtremeImpact
         || (uniqueDexCount === 1 && allPools.length < 5)
-        || (routes.length === 0 && allPools.length > 0);
+        || (routes.length === 0 && allPools.length > 0)
+        || allPools.length === 0;  // No pools found at all - try harder with useAllDex=true
 
       if (shouldFallback && client) {
-        console.warn(`[useRoute] Fallback triggered: extremeImpact=${primaryHasExtremeImpact}, uniqueDex=${uniqueDexCount}, poolCount=${allPools.length}, routeCount=${routes.length}`);
+        console.warn(`[useRoute] Fallback triggered: highImpact=${primaryHasHighImpact}, extremeImpact=${primaryHasExtremeImpact}, uniqueDex=${uniqueDexCount}, poolCount=${allPools.length}, routeCount=${routes.length}`);
 
         // Fetch from ALL_DEX_LIST directly using fetchPoolsForSwap with useAllDex=true
         // This properly bypasses the registered router filter unlike fallbackGetPairs
         const allDexPools = await fetchPoolsForSwap(tokenInAddress, tokenOutAddress, client, true);
-        
+
         console.log(`[useRoute] Fallback: primary had ${allPools.length} pools, ALL_DEX found ${allDexPools.length} pools`);
 
         // Merge pools from both sources (deduplicate by factory:token0:token1)
@@ -161,16 +234,16 @@ export function useRoute(
         // The standard fetchPoolsForSwap skips hub-to-hub pairs when both tokens are hubs,
         // but the fallback needs to find intermediate pools for BFS to discover multi-hop routes
         const hubPairs = await fetchHubTokenPairs(tokenInAddress, tokenOutAddress, client, true);
-        
+
         console.log(`[useRoute] Fallback: found ${hubPairs.length} hub-token intermediate pools`);
-        
+
         if (hubPairs.length > 0) {
           const existingKeys = new Set(allPools.map(p => `${p.factory}:${p.token0}:${p.token1}`));
           const newHubPools = hubPairs.filter(p => {
             const key = `${p.factory}:${p.token0}:${p.token1}`;
             return !existingKeys.has(key);
           });
-          
+
           if (newHubPools.length > 0) {
             console.log(`[useRoute] Fallback: found ${newHubPools.length} new hub-hop pools`);
             allPools = [...allPools, ...newHubPools];
@@ -186,6 +259,10 @@ export function useRoute(
           allPools,
           feeBps,
         );
+
+        // Re-check price impact warnings after fallback
+        const updatedImpactWarnings = checkPriceImpact(routes);
+        setPriceImpactWarnings([...freshnessWarnings, ...updatedImpactWarnings]);
 
         console.log(`[useRoute] After fallback: ${routes.length} routes found, best priceImpact=${routes[0]?.priceImpact}`);
       }
@@ -297,5 +374,46 @@ export function useRoute(
     formattedOutput,
     /** H-01: decimals of the output token. */
     outDecimals,
+    /** Phase 5.3: Price impact warnings for routes exceeding thresholds. */
+    priceImpactWarnings,
+    /** Phase 5.3: Check if the best route has high price impact. */
+    hasHighPriceImpact: route ? route.priceImpact > PRICE_IMPACT_WARN_THRESHOLD : false,
+    /** Phase 5.3: Check if the best route has extreme price impact (may be blocked). */
+    hasExtremePriceImpact: route ? route.priceImpact > PRICE_IMPACT_BLOCK : false,
+    /** Phase 6: Route liquidity analysis for auto multi-hop suggestion. */
+    routeLiquidityAnalysis: (() => {
+      if (!tokenInAddress || !tokenOutAddress || pools.length === 0) return null;
+      return analyzeRouteLiquidity(tokenInAddress, tokenOutAddress, pools);
+    })(),
+    /** Phase 6: Whether multi-hop should be suggested for this pair. */
+    shouldSuggestMultiHop: (() => {
+      if (!tokenInAddress || !tokenOutAddress || pools.length === 0) return false;
+      const analysis = analyzeRouteLiquidity(tokenInAddress, tokenOutAddress, pools);
+      return analysis.shouldPreferMultiHop;
+    })(),
+    /** Phase 7: Route comparison for advisor mode (direct vs multi-hop). */
+    routeComparison: ((): RouteComparison | null => {
+      if (!tokenInAddress || !tokenOutAddress || allRoutes.length === 0) return null;
+      const bestDirect = allRoutes.find(r => r.routeType === 'direct');
+      const bestMultiHop = allRoutes.find(r =>
+        r.routeType === 'multi_hop' &&
+        r.intermediateToken?.toLowerCase() === CONTRACTS.WWDOGE.toLowerCase()
+      );
+      return compareRoutes(bestDirect ?? null, bestMultiHop ?? null, outDecimals);
+    })(),
+    /** Phase 7: Pool liquidity data with TVL and tier information. */
+    poolsWithLiquidity: pools.map(p => ({
+      ...p,
+      tvlUsd: p.tvlUsd ?? (() => {
+        // Get actual decimals for each token and normalize reserves
+        const decimals0 = getTokenDecimals(p.token0);
+        const decimals1 = getTokenDecimals(p.token1);
+        const exponent0 = 18 - decimals0;
+        const exponent1 = 18 - decimals1;
+        const r0Normalized = Number(p.reserve0) / Math.pow(10, exponent0);
+        const r1Normalized = Number(p.reserve1) / Math.pow(10, exponent1);
+        return 2 * Math.sqrt(r0Normalized * r1Normalized);
+      })(),
+    })),
   };
 }

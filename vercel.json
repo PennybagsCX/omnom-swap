@@ -3,6 +3,20 @@
     {
       "source": "/api/mexc/:path*",
       "destination": "https://api.mexc.com/:path*"
+    },
+    {
+      "source": "/api/gecko/:path*",
+      "destination": "https://api.geckoterminal.com/api/v2/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
     }
   ]
 }

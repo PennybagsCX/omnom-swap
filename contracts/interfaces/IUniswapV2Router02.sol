@@ -46,6 +46,21 @@ interface IUniswapV2Router02 {
         view
         returns (uint256[] memory amounts);
 
+    /// @notice Swaps an exact amount of input tokens for as many output tokens as possible,
+    ///         supporting fee-on-transfer tokens by using balance diffs instead of exact amounts.
+    /// @param amountIn The amount of input tokens to send.
+    /// @param amountOutMin The minimum amount of output tokens that must be received.
+    /// @param path An array of token addresses representing the swap path.
+    /// @param to The recipient of the output tokens.
+    /// @param deadline Unix timestamp after which the transaction will revert.
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+
     /// @notice Returns the factory address associated with this router.
     function factory() external view returns (address);
 }

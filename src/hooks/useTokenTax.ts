@@ -9,16 +9,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import {
-  createPublicClient,
-  http,
-  parseAbi,
-  type Address,
-  getAddress,
-} from 'viem';
-import { dogechain } from 'wagmi/chains';
+import { getAddress } from 'viem';
 import { CONTRACTS } from '../lib/constants';
-import { fetchPoolsForPair } from '../services/pathFinder/poolFetcher';
+import { detectTokenTax as dynamicDetectTax, getCachedTax } from '../services/taxDetection';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,9 +20,9 @@ export interface TokenTaxInfo {
   sellTax: number;
   isTaxed: boolean;
   isHoneypot: boolean;   // true if sell simulation fails entirely (warning only, not blocking)
-  warningLevel: 'none' | 'low' | 'medium' | 'high' | 'danger';
+  warningLevel: 'none' | 'low' | 'medium' | 'high' | 'danger' | 'critical';
   warningMessage: string;
-  source: 'function' | 'simulation' | 'fallback' | 'error';
+  source: 'function' | 'simulation' | 'fallback' | 'error' | 'registry';
 }
 
 const DEFAULT_TAX: TokenTaxInfo = {
@@ -80,241 +73,6 @@ function saveCache(cache: Map<string, CacheEntry>) {
   } catch { /* sessionStorage full — ignore */ }
 }
 
-// ─── Client ───────────────────────────────────────────────────────────────────
-
-const client = createPublicClient({ chain: dogechain, transport: http() });
-
-// ─── Common tax function selectors ────────────────────────────────────────────
-// Many tax tokens expose these functions. Try them first for speed.
-
-const TAX_ABI = parseAbi([
-  'function buyTotalFees() external view returns (uint256)',
-  'function sellTotalFees() external view returns (uint256)',
-  'function _buyTax() external view returns (uint256)',
-  'function _sellTax() external view returns (uint256)',
-  'function totalBuyFee() external view returns (uint256)',
-  'function totalSellFee() external view returns (uint256)',
-  'function buyFee() external view returns (uint256)',
-  'function sellFee() external view returns (uint256)',
-  'function buyTax() external view returns (uint256)',
-  'function sellTax() external view returns (uint256)',
-  'function totalFee() external view returns (uint256)',
-  'function taxFee() external view returns (uint256)',
-  'function _taxFee() external view returns (uint256)',
-  'function liquidityFee() external view returns (uint256)',
-  'function _liquidityFee() external view returns (uint256)',
-]);
-
-const ROUTER_ABI = parseAbi([
-  'function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)',
-]);
-
-const ERC20_ABI = parseAbi([
-  'function balanceOf(address) external view returns (uint256)',
-  'function decimals() external view returns (uint8)',
-]);
-
-// ─── Detection functions ──────────────────────────────────────────────────────
-
-async function tryTaxFunctions(tokenAddress: Address): Promise<{ buyTax: number; sellTax: number } | null> {
-  const addr = getAddress(tokenAddress);
-
-  const tryCall = async (fn: (typeof TAX_ABI)[number]['name']): Promise<number | null> => {
-    try {
-      const result = await client.readContract({
-        address: addr,
-        abi: TAX_ABI,
-        functionName: fn,
-      });
-      const val = Number(result);
-      // Tax values are typically in basis points (100 = 1%) or percentage (1 = 1%)
-      // Heuristic: if > 100, assume basis points
-      return val > 100 ? val / 100 : val;
-    } catch {
-      return null;
-    }
-  };
-
-  // Try buy tax functions in order of commonness
-  type TaxFn = (typeof TAX_ABI)[number]['name'];
-  const buyFunctions: TaxFn[] = ['buyTotalFees', '_buyTax', 'totalBuyFee', 'buyFee', 'buyTax'];
-  const sellFunctions: TaxFn[] = ['sellTotalFees', '_sellTax', 'totalSellFee', 'sellFee', 'sellTax'];
-  const sharedFunctions: TaxFn[] = ['totalFee', 'taxFee', '_taxFee'];
-
-  let buyTax: number | null = null;
-  let sellTax: number | null = null;
-
-  for (const fn of buyFunctions) {
-    const val = await tryCall(fn);
-    if (val !== null && val >= 0) { buyTax = val; break; }
-  }
-
-  for (const fn of sellFunctions) {
-    const val = await tryCall(fn);
-    if (val !== null && val >= 0) { sellTax = val; break; }
-  }
-
-  // If no separate buy/sell found, try shared fee functions
-  if (buyTax === null && sellTax === null) {
-    for (const fn of sharedFunctions) {
-      const val = await tryCall(fn);
-      if (val !== null && val > 0) {
-        buyTax = val;
-        sellTax = val;
-        break;
-      }
-    }
-  }
-
-  if (buyTax !== null || sellTax !== null) {
-    return { buyTax: buyTax ?? 0, sellTax: sellTax ?? 0 };
-  }
-
-  return null;
-}
-
-async function simulateTaxViaSwap(tokenAddress: Address): Promise<{
-  buyTax: number;
-  sellTax: number;
-  isHoneypot: boolean;
-} | null> {
-  const addr = tokenAddress.toLowerCase();
-  const wwdoge = CONTRACTS.WWDOGE.toLowerCase();
-
-  if (addr === wwdoge) return { buyTax: 0, sellTax: 0, isHoneypot: false };
-
-  // Find the best pool for token/WWDOGE
-  const pools = await fetchPoolsForPair(addr, wwdoge, client);
-  if (pools.length === 0) return null;
-
-  const pool = pools[0]; // Use first available pool
-  const routerAddr = getAddress(pool.router);
-
-  // Get token decimals
-  let decimals = 18;
-  try {
-    decimals = await client.readContract({
-      address: getAddress(addr),
-      abi: ERC20_ABI,
-      functionName: 'decimals',
-    });
-  } catch { /* use default */ }
-
-  // Test amount: 1 token
-  const testAmount = 10n ** BigInt(decimals);
-
-  // Determine if token is token0 or token1 in the pair
-  const isToken0 = pool.token0 === addr;
-  const reserveToken = isToken0 ? pool.reserve0 : pool.reserve1;
-  const reserveWwdoge = isToken0 ? pool.reserve1 : pool.reserve0;
-
-  if (reserveToken === 0n || reserveWwdoge === 0n) return null;
-
-  // Expected output from reserves (constant product)
-  // expectedOut = (testAmount * reserveWwdoge) / (reserveToken + testAmount)
-  const expectedOut = (testAmount * reserveWwdoge) / (reserveToken + testAmount);
-
-  if (expectedOut === 0n) return null;
-
-  // Try getAmountsOut on the router to see what the DEX actually quotes
-  let routerQuotedOut = 0n;
-  let sellWorks = false;
-
-  try {
-    const path = isToken0
-      ? [getAddress(addr), getAddress(wwdoge)]
-      : [getAddress(wwdoge), getAddress(addr)];
-
-    // Sell simulation: token → WWDOGE
-    const amounts = await client.readContract({
-      address: routerAddr,
-      abi: ROUTER_ABI,
-      functionName: 'getAmountsOut',
-      args: [testAmount, path],
-    }) as bigint[];
-
-    if (amounts.length >= 2 && amounts[amounts.length - 1] > 0n) {
-      routerQuotedOut = amounts[amounts.length - 1];
-      sellWorks = true;
-    }
-  } catch {
-    // Router call failed — could be restricted
-    sellWorks = false;
-  }
-
-  if (!sellWorks) {
-    // Check if it's truly restricted by trying a different DEX
-    for (let i = 1; i < pools.length; i++) {
-      try {
-        const altRouter = getAddress(pools[i].router);
-        const altPath = [getAddress(addr), getAddress(wwdoge)];
-        const amounts = await client.readContract({
-          address: altRouter,
-          abi: ROUTER_ABI,
-          functionName: 'getAmountsOut',
-          args: [testAmount, altPath],
-        }) as bigint[];
-        if (amounts.length >= 2 && amounts[amounts.length - 1] > 0n) {
-          routerQuotedOut = amounts[amounts.length - 1];
-          sellWorks = true;
-          break;
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    if (!sellWorks) {
-      return { buyTax: 0, sellTax: 0, isHoneypot: true };
-    }
-  }
-
-  // Compute sell tax: difference between expected and quoted
-  // If router quotes less than expected from reserves, the difference is the tax
-  let sellTax = 0;
-  if (routerQuotedOut > 0n && expectedOut > 0n) {
-    if (routerQuotedOut < expectedOut) {
-      const diff = expectedOut - routerQuotedOut;
-      sellTax = Math.round(Number((diff * 10000n) / expectedOut)) / 100;
-    }
-  }
-
-  // For buy tax, try reverse direction (WWDOGE → token)
-  let buyTax = 0;
-  try {
-    const buyPath = [getAddress(wwdoge), getAddress(addr)];
-    const buyAmount = 10n ** 18n; // 1 WWDOGE
-    const buyAmounts = await client.readContract({
-      address: routerAddr,
-      abi: ROUTER_ABI,
-      functionName: 'getAmountsOut',
-      args: [buyAmount, buyPath],
-    }) as bigint[];
-
-    if (buyAmounts.length >= 2) {
-      const quotedOut = buyAmounts[buyAmounts.length - 1];
-      // Expected from reserves
-      const reserveWwdogeBuy = isToken0 ? pool.reserve1 : pool.reserve0;
-      const reserveTokenBuy = isToken0 ? pool.reserve0 : pool.reserve1;
-      const expectedBuyOut = (buyAmount * reserveTokenBuy) / (reserveWwdogeBuy + buyAmount);
-
-      if (quotedOut < expectedBuyOut && expectedBuyOut > 0n) {
-        const diff = expectedBuyOut - quotedOut;
-        buyTax = Math.round(Number((diff * 10000n) / expectedBuyOut)) / 100;
-      }
-    }
-  } catch {
-    // Buy simulation failed — assume same as sell tax
-    buyTax = sellTax;
-  }
-
-  return {
-    buyTax: Math.max(0, buyTax),
-    sellTax: Math.max(0, sellTax),
-    isHoneypot: false,
-  };
-}
-
 // ─── Warning helpers ──────────────────────────────────────────────────────────
 
 function computeWarningLevel(buyTax: number, sellTax: number, isHoneypot: boolean): {
@@ -360,50 +118,69 @@ function computeWarningLevel(buyTax: number, sellTax: number, isHoneypot: boolea
 // ─── Main detection function ──────────────────────────────────────────────────
 
 async function detectTokenTax(tokenAddress: string): Promise<TokenTaxInfo> {
-  const addr = getAddress(tokenAddress) as Address;
-  const normalizedAddr = addr.toLowerCase();
+  const normalizedAddr = getAddress(tokenAddress).toLowerCase();
 
   // Skip known platform tokens — they have no tax
   if (PLATFORM_TOKENS.has(normalizedAddr)) return DEFAULT_TAX;
 
-  // Step 1: Try common tax function selectors (fastest, 2-4 RPC calls)
-  const funcResult = await tryTaxFunctions(addr);
-  if (funcResult !== null) {
-    const buyTax = funcResult.buyTax;
-    const sellTax = funcResult.sellTax;
+  // Fast-path: check dynamic service cache (synchronous)
+  const cached = getCachedTax(normalizedAddr);
+  if (cached) {
+    const buyTax = cached.buyTax;
+    const sellTax = cached.sellTax;
     const isTaxed = buyTax > 0 || sellTax > 0;
-    const { level, message } = computeWarningLevel(buyTax, sellTax, false);
+    const isHoneypot = sellTax >= 100;
+    const { level, message } = computeWarningLevel(buyTax, sellTax, isHoneypot);
+    console.log(`[useTokenTax] Cache hit for ${normalizedAddr.slice(0, 6)}...${normalizedAddr.slice(-4)}: buyTax=${buyTax}%, sellTax=${sellTax}%, type=${cached.taxType}, source=${cached.source}`);
     return {
       buyTax,
       sellTax,
       isTaxed,
-      isHoneypot: false,
+      isHoneypot,
       warningLevel: level,
       warningMessage: message,
-      source: 'function',
+      source: cached.source === 'transfer-test' ? 'simulation' : cached.source,
     };
   }
 
-  // Step 2: Simulate swap to measure actual tax (slower, ~5-10 RPC calls)
-  const simResult = await simulateTaxViaSwap(addr);
-  if (simResult !== null) {
-    const buyTax = simResult.buyTax;
-    const sellTax = simResult.sellTax;
+  // Run the full dynamic detection pipeline
+  try {
+    const dynamicResult = await dynamicDetectTax(normalizedAddr);
+    const buyTax = dynamicResult.buyTax;
+    const sellTax = dynamicResult.sellTax;
     const isTaxed = buyTax > 0 || sellTax > 0;
-    const { level, message } = computeWarningLevel(buyTax, sellTax, simResult.isHoneypot);
+
+    // Honeypot detection: Block tokens that cannot be sold
+    const HONEYPOT_THRESHOLD = 90; // 90% sell tax = honeypot
+    const isHoneypot = sellTax >= HONEYPOT_THRESHOLD;
+
+    if (isHoneypot) {
+      const error = new Error(`Honeypot detected: Token cannot be sold (${sellTax}% sell tax)`);
+      error.name = 'HoneypotError';
+      throw error;
+    }
+
+    // High tax warning threshold (25% is reasonable max)
+    const MAX_REASONABLE_TAX = 25;
+    const hasUnreasonableTax = buyTax > MAX_REASONABLE_TAX || sellTax > MAX_REASONABLE_TAX;
+
+    const { level, message } = computeWarningLevel(buyTax, sellTax, isHoneypot);
+    console.log(`[useTokenTax] Dynamic detection for ${normalizedAddr.slice(0, 6)}...${normalizedAddr.slice(-4)}: buyTax=${buyTax}%, sellTax=${sellTax}%, type=${dynamicResult.taxType}, source=${dynamicResult.source}`);
     return {
       buyTax,
       sellTax,
       isTaxed,
-      isHoneypot: simResult.isHoneypot,
-      warningLevel: level,
-      warningMessage: message,
-      source: 'simulation',
+      isHoneypot,
+      warningLevel: hasUnreasonableTax ? 'critical' : level,
+      warningMessage: hasUnreasonableTax
+        ? `WARNING: Extremely high tax detected (${buyTax}% buy / ${sellTax}% sell). This token may have unfavorable economics.`
+        : message,
+      source: dynamicResult.source === 'transfer-test' ? 'simulation' : dynamicResult.source,
     };
+  } catch {
+    console.log(`[useTokenTax] Dynamic detection failed for ${normalizedAddr.slice(0, 6)}...${normalizedAddr.slice(-4)}: using fallback (no tax assumed), source=error`);
+    return { ...DEFAULT_TAX, source: 'error' };
   }
-
-  // Step 3: Could not determine — assume safe
-  return DEFAULT_TAX;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────

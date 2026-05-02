@@ -85,7 +85,7 @@ User -> Frontend -> Path Finder -> Reserve Fetcher -> DEX Pools
 
 The aggregator is an ownable, pausable contract that executes pre-computed swap routes across multiple DEXes. It does **not** perform on-chain pathfinding - all routing logic lives off-chain to save gas and maximize flexibility.
 
-**Deployed Address:** `0x8F8f0e68Ff11E35f8Ccb717771e8Efa748AE382f` (Dogechain, Chain ID 2000)
+**Deployed Address:** `0x88F81031b258A0Fb789AC8d3A8071533BFADeC14` (Dogechain, Chain ID 2000)
 
 **Key Features:**
 - Multi-hop, multi-DEX swap execution
@@ -467,5 +467,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - **Website:** [https://omnomswap.com](https://omnomswap.com)
 - **Dogechain Explorer:** [https://explorer.dogechain.dog](https://explorer.dogechain.dog)
-- **Contract:** `0x8F8f0e68Ff11E35f8Ccb717771e8Efa748AE382f`
+- **Contract:** `0x88F81031b258A0Fb789AC8d3A8071533BFADeC14`
 - **Treasury:** `0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88`

@@ -22,6 +22,7 @@ export interface AutoSlippageBreakdown {
   hopBuffer: number;
   thinPairBuffer: number;
   varianceBuffer: number;
+  taxBuffer: number;
   total: number;
 }
 
@@ -42,6 +43,10 @@ export interface AutoSlippageResult {
   effectiveBps: bigint;
   /** Warning level: 'none' | 'warning' (>5%) | 'danger' (>15%) */
   warningLevel: 'none' | 'warning' | 'danger';
+  /** Whether the pool is a thin pool (TVL < $100K) */
+  isThinPool: boolean;
+  /** TVL of the pool for thin pool detection */
+  poolTvl: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -55,6 +60,8 @@ const MIN_SLIPPAGE = 0.5;           // never go below 0.5%
 const MAX_SLIPPAGE = 50;            // never exceed 50%
 const WARNING_THRESHOLD = 5;        // orange warning at 5%
 const DANGER_THRESHOLD = 15;        // red danger at 15%
+const TVL_THIN_POOL_THRESHOLD = 100_000; // $100K TVL threshold for thin pool
+const TVL_THIN_POOL_MIN_SLIPPAGE = 1.0;  // 1% minimum slippage for TVL < $100K
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -66,6 +73,9 @@ const DANGER_THRESHOLD = 15;        // red danger at 15%
  * @param tradeSizeVsLiquidity  Ratio of trade amount to pool reserve (0–1)
  * @param isThinPair         Whether the route passes through a low-liquidity intermediate
  * @param manualSlippage     User's manual slippage percentage string (e.g., "0.5")
+ * @param poolTvl            Pool TVL in USD for thin pool detection (default: Infinity = no thin pool check)
+ * @param buyTax             Buy tax percentage for the output token (0 if unknown)
+ * @param sellTax            Sell tax percentage for the input token (0 if unknown)
  */
 export function useAutoSlippage(
   priceImpact: number,
@@ -73,6 +83,9 @@ export function useAutoSlippage(
   tradeSizeVsLiquidity: number,
   isThinPair: boolean,
   manualSlippage: string,
+  poolTvl: number = Infinity,
+  buyTax: number = 0,
+  sellTax: number = 0,
 ): AutoSlippageResult {
   const [isAuto, setAuto] = useState(true);
 
@@ -80,24 +93,41 @@ export function useAutoSlippage(
     // Convert priceImpact from fraction (0–1) to percentage (0–100) for the buffer
     const impactPct = Math.abs(priceImpact) * 100;
 
+    // ── Thin Pool Detection ─────────────────────────────────────────────────────
+    // Pools with TVL < $100K are considered thin and require minimum 1% slippage
+    const thinPoolBuffer = isThinPair ? THIN_PAIR_BUFFER : 0;
+
+    // ── Tax Buffer ─────────────────────────────────────────────────────────────
+    // If the output token has a buy tax or the input token has a sell tax,
+    // we must ensure slippage covers tax + a safety buffer.
+    // Formula: taxBuffer = buyTax + sellTax (the 0.5% base covers the buffer)
+    const totalTax = buyTax + sellTax;
+    const taxBuffer = totalTax;
+
     const base = BASE_SLIPPAGE;
     const priceImpactBuffer = impactPct * PRICE_IMPACT_FACTOR;
     const hopBuffer = Math.max(0, hopCount - 1) * HOP_BUFFER;
-    const thinPairBuffer = isThinPair ? THIN_PAIR_BUFFER : 0;
     const varianceBuffer = Math.min(Math.max(0, tradeSizeVsLiquidity), 1) * VARIANCE_FACTOR;
 
-    const raw = base + priceImpactBuffer + hopBuffer + thinPairBuffer + varianceBuffer;
-    const total = Math.round(Math.min(Math.max(raw, MIN_SLIPPAGE), MAX_SLIPPAGE) * 100) / 100;
+    const raw = base + priceImpactBuffer + hopBuffer + thinPoolBuffer + varianceBuffer;
+
+    // ── Enforce Minimum Slippage ────────────────────────────────────────────────
+    // 1. Thin pool minimum: $100K TVL pools need at least 1% slippage
+    // 2. Tax minimum: slippage must cover buyTax + sellTax + 0.5% base
+    const withThinPoolMin = Math.max(raw, TVL_THIN_POOL_MIN_SLIPPAGE);
+    const withTaxMin = Math.max(withThinPoolMin, totalTax + MIN_SLIPPAGE);
+    const total = Math.round(Math.min(Math.max(withTaxMin, MIN_SLIPPAGE), MAX_SLIPPAGE) * 100) / 100;
 
     return {
       base,
       priceImpactBuffer: Math.round(priceImpactBuffer * 100) / 100,
       hopBuffer: Math.round(hopBuffer * 100) / 100,
-      thinPairBuffer: Math.round(thinPairBuffer * 100) / 100,
+      thinPairBuffer: Math.round(thinPoolBuffer * 100) / 100,
       varianceBuffer: Math.round(varianceBuffer * 100) / 100,
+      taxBuffer: Math.round(taxBuffer * 100) / 100,
       total,
     };
-  }, [priceImpact, hopCount, tradeSizeVsLiquidity, isThinPair]);
+  }, [priceImpact, hopCount, tradeSizeVsLiquidity, isThinPair, poolTvl, buyTax, sellTax]);
 
   const autoSlippage = breakdown.total.toFixed(2);
   const slippageBps = BigInt(Math.round(breakdown.total * 100));
@@ -108,7 +138,10 @@ export function useAutoSlippage(
   const effectiveSlippage = isAuto ? autoSlippage : manualSlippage;
   const effectiveBps = isAuto ? slippageBps : manualBps;
 
-  // Warning level based on effective slippage
+  // Thin pool detection
+  const isThinPool = poolTvl < TVL_THIN_POOL_THRESHOLD && poolTvl > 0;
+  
+  // Effective values based on effective slippage
   const effectiveValue = parseFloat(effectiveSlippage) || 0;
   const warningLevel: 'none' | 'warning' | 'danger' =
     effectiveValue > DANGER_THRESHOLD
@@ -126,5 +159,7 @@ export function useAutoSlippage(
     effectiveSlippage,
     effectiveBps,
     warningLevel,
+    isThinPool,
+    poolTvl,
   };
 }

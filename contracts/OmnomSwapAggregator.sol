@@ -156,6 +156,14 @@ contract OmnomSwapAggregator is ReentrancyGuard {
     /// @notice Emitted when the contract is unpaused.
     event Unpaused();
 
+    /// @notice Emitted when a user is refunded for a failed swap.
+    event UserRefunded(
+        address indexed user,
+        address indexed token,
+        uint256 amount,
+        address indexed refundRecipient
+    );
+
     // ============================================================
     // Modifiers
     // ============================================================
@@ -261,11 +269,14 @@ contract OmnomSwapAggregator is ReentrancyGuard {
             // Validate the path starts with the current token
             require(step.path[0] == currentToken, "Path mismatch");
 
-            // Validate the amount in matches our running balance for the first step
-            // For subsequent steps, the amountIn should come from the previous output
+            // For the first step, use the contract-computed swapAmount directly.
+            // This handles fee-on-transfer tokens where the actual received amount
+            // (measured via balance diff) may differ from any frontend prediction
+            // due to integer division rounding.
+            // For subsequent steps, the amountIn comes from the previous output.
             uint256 stepAmountIn = step.amountIn;
             if (i == 0) {
-                require(stepAmountIn == swapAmount, "Step amount mismatch");
+                stepAmountIn = swapAmount;
             }
 
             // Approve the router to spend the tokens
@@ -275,8 +286,16 @@ contract OmnomSwapAggregator is ReentrancyGuard {
             // block.timestamp crosses deadline between our check and router call)
             require(block.timestamp <= request.deadline, "Expired during swap");
 
+            // Determine the output token for this step
+            address currentTokenOut = step.path[step.path.length - 1];
+
+            // Measure actual balance before swap (handles fee-on-transfer output tokens)
+            uint256 balBeforeSwap = IERC20(currentTokenOut).balanceOf(address(this));
+
             // Execute the swap - tokens come back to this contract
-            uint256[] memory amounts = IUniswapV2Router02(step.router).swapExactTokensForTokens(
+            // Use SupportingFeeOnTransferTokens variant to handle fee-on-transfer tokens correctly.
+            // This returns no amounts array, so we measure output via balance diffs below.
+            IUniswapV2Router02(step.router).swapExactTokensForTokensSupportingFeeOnTransferTokens(
                 stepAmountIn,
                 step.minAmountOut,
                 step.path,
@@ -287,11 +306,17 @@ contract OmnomSwapAggregator is ReentrancyGuard {
             // Reset approval to 0 for security (some tokens require this)
             currentToken.safeApprove(step.router, 0);
 
-            // Update tracking: the last element is the output amount
-            uint256 outputAmount = amounts[amounts.length - 1];
-            currentToken = step.path[step.path.length - 1];
-            runningBalance = outputAmount;
-            protocolBalance[currentToken] += outputAmount;
+            // Measure actual received balance (handles fee-on-transfer / anti-contract tokens)
+            uint256 balAfterSwap = IERC20(currentTokenOut).balanceOf(address(this));
+            uint256 actualOutput = balAfterSwap - balBeforeSwap;
+
+            // Verify we received at least the minimum expected (after any transfer taxes)
+            require(actualOutput >= step.minAmountOut, "Insufficient output after tax");
+
+            // Update tracking using actual received amount, not router's reported amount
+            currentToken = currentTokenOut;
+            runningBalance = actualOutput;
+            protocolBalance[currentToken] += actualOutput;
         }
 
         // -- Slippage check --------------------------------------
@@ -464,6 +489,29 @@ contract OmnomSwapAggregator is ReentrancyGuard {
         }
         token.safeTransfer(owner, amount);
         emit TokensRescued(token, amount);
+    }
+
+    /**
+     * @notice Refunds ERC20 tokens to a user from failed swap transactions.
+     * @dev Only callable by the owner and protected against reentrancy.
+     *      Used to refund users whose swap transactions failed and tokens
+     *      are held in the protocol's balance tracking.
+     * @param user   The user address to refund.
+     * @param token  The token address to refund.
+     * @param amount The amount to refund.
+     */
+    function refundUser(
+        address user,
+        address token,
+        uint256 amount
+    ) external onlyOwner nonReentrant {
+        require(amount > 0, "Amount must be greater than zero");
+        require(protocolBalance[token] >= amount, "Insufficient balance");
+
+        protocolBalance[token] -= amount;
+        token.safeTransfer(user, amount);
+
+        emit UserRefunded(user, token, amount, user);
     }
 
     // ============================================================

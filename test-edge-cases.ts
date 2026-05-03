@@ -92,19 +92,19 @@ async function runEdgeCaseTests() {
   try {
     const pools = await scanFactoriesForOmnomPools();
     const activeCount = pools.filter(p => p.category === 'active').length;
-    const abandonedCount = pools.filter(p => p.category === 'abandoned').length;
+    const inactiveCount = pools.filter(p => p.category === 'inactive').length;
 
     console.log('  ✓ PASS: Full scan completed');
     console.log('    - Total pools:', pools.length);
     console.log('    - Active:', activeCount);
-    console.log('    - Abandoned:', abandonedCount);
+    console.log('    - Abandoned:', inactiveCount);
     console.log('    - New pools (delta scan):', pools.filter(p => p.isNew).length);
 
     results.passed++;
     results.tests.push({
       name: 'Full scan',
       passed: true,
-      detail: `${pools.length} total (${activeCount} active, ${abandonedCount} abandoned)`
+      detail: `${pools.length} total (${activeCount} active, ${inactiveCount} inactive)`
     });
   } catch (e) {
     const error = e instanceof Error ? e : new Error(String(e));

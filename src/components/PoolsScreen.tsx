@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ExternalLink, Droplets, PawPrint, AlertTriangle, Plus, Minus, Filter } from 'lucide-react';
+import { ExternalLink, Droplets, PawPrint, AlertTriangle, Plus, Minus, Filter, ChevronUp, ChevronDown } from 'lucide-react';
 import { NETWORK_INFO, calcPriceImpact, impactColor, resolveDexName } from '../lib/constants';
 import { useOmnomData, type DexPair } from '../hooks/useOmnomData';
 import { useNewPairMonitor } from '../hooks/useNewPairMonitor';
@@ -10,12 +10,12 @@ const fmtUsd = formatCompactPrice;
 
 const LOW_TVL_THRESHOLD = 500; // Pools below $500 TVL flagged as low-liquidity
 
-type PoolCategory = 'all' | 'active' | 'abandoned';
+type PoolCategory = 'all' | 'active' | 'inactive';
 
 const CATEGORY_CONFIG: Record<PoolCategory, { label: string; color: string; bgColor: string; borderColor: string }> = {
   all: { label: 'All', color: 'text-white', bgColor: 'bg-surface-container-low', borderColor: 'border-outline-variant/30' },
   active: { label: 'Active', color: 'text-green-400', bgColor: 'bg-green-900/20', borderColor: 'border-green-500/30' },
-  abandoned: { label: 'Abandoned', color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/30' },
+  inactive: { label: 'Inactive', color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/30' },
 };
 
 function pctChange(val: number | undefined | null): { text: string; color: string } {
@@ -38,20 +38,80 @@ export function PoolsScreen() {
   // Category filter state
   const [categoryFilter, setCategoryFilter] = useState<PoolCategory>('all');
 
+  // Sort state
+  type SortColumn = 'tvl' | 'volume24h' | 'change24h' | 'txns24h' | 'price' | 'impact';
+  const [sortColumn, setSortColumn] = useState<SortColumn | ''>('');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
   // Filter pools by category
   const filteredPools = useMemo(() => {
     if (categoryFilter === 'all') return allPools as DexPair[];
     return (allPools as DexPair[]).filter(pool => {
-      const category = (pool as DexPair & { _category?: 'active' | 'abandoned' })._category;
-      if (!category) {
-        // Default: pools with TVL > 0 are active
-        return categoryFilter === 'active' && (pool.liquidity?.usd || 0) > 0;
-      }
+      const category = (pool as DexPair & { _category?: 'active' | 'inactive' })._category;
       return category === categoryFilter;
     });
   }, [allPools, categoryFilter]);
 
-  const pools = filteredPools;
+  // Sort handler
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  // Sort indicator component
+  const SortIndicator = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) return null;
+    return sortDirection === 'asc' ? <ChevronUp className="w-3 h-3 inline ml-1" /> : <ChevronDown className="w-3 h-3 inline ml-1" />;
+  };
+
+  // Sorted pools
+  const sortedPools = useMemo(() => {
+    if (!sortColumn) return filteredPools;
+    return [...filteredPools].sort((a, b) => {
+      const aTvl = a.liquidity?.usd || 0;
+      const bTvl = b.liquidity?.usd || 0;
+      const aVol24 = a.volume?.h24 || 0;
+      const bVol24 = b.volume?.h24 || 0;
+      const aChange = a.priceChange?.h24 ?? 0;
+      const bChange = b.priceChange?.h24 ?? 0;
+      const aTxns = (a.txns?.h24?.buys || 0) + (a.txns?.h24?.sells || 0);
+      const bTxns = (b.txns?.h24?.buys || 0) + (b.txns?.h24?.sells || 0);
+      const aPrice = parseFloat(a.priceUsd || '0');
+      const bPrice = parseFloat(b.priceUsd || '0');
+      const aImpact = aTvl > 0 ? calcPriceImpact(100, aTvl / 2) : 0;
+      const bImpact = bTvl > 0 ? calcPriceImpact(100, bTvl / 2) : 0;
+
+      let compare = 0;
+      switch (sortColumn) {
+        case 'tvl':
+          compare = aTvl - bTvl;
+          break;
+        case 'volume24h':
+          compare = aVol24 - bVol24;
+          break;
+        case 'change24h':
+          compare = aChange - bChange;
+          break;
+        case 'txns24h':
+          compare = aTxns - bTxns;
+          break;
+        case 'price':
+          compare = aPrice - bPrice;
+          break;
+        case 'impact':
+          compare = aImpact - bImpact;
+          break;
+      }
+
+      return sortDirection === 'asc' ? compare : -compare;
+    });
+  }, [filteredPools, sortColumn, sortDirection]);
+
+  const pools = sortedPools;
 
   const [lpModal, setLpModal] = useState<{
     open: boolean;
@@ -117,7 +177,7 @@ export function PoolsScreen() {
             const config = CATEGORY_CONFIG[cat];
             const isActive = categoryFilter === cat;
             const count = cat === 'all' ? poolCount : (allPools as DexPair[]).filter(p => {
-              const category = (p as DexPair & { _category?: 'active' | 'abandoned' })._category;
+              const category = (p as DexPair & { _category?: 'active' | 'inactive' })._category;
               if (!category) return cat === 'active' && (p.liquidity?.usd || 0) > 0;
               return category === cat;
             }).length;
@@ -180,7 +240,7 @@ export function PoolsScreen() {
               const price = parseFloat(pool.priceUsd || '0');
               const poolName = `${pool.baseToken?.symbol || '?'}/${pool.quoteToken?.symbol || '?'}`;
               const refImpact = tvl > 0 ? calcPriceImpact(100, tvl / 2) : 0;
-              const poolCategory = (pool as DexPair & { _category?: 'active' | 'abandoned' })._category;
+              const poolCategory = (pool as DexPair & { _category?: 'active' | 'inactive' })._category;
 
               return (
                 <div key={pool.pairAddress} className={`bg-surface-container-low border border-outline-variant/15 p-4 ${i === 0 ? 'border-l-4 border-l-primary bg-primary/5' : ''}`}>
@@ -190,7 +250,7 @@ export function PoolsScreen() {
                       {(() => {
                         const badge = poolCategory || (tvl > 0 ? 'active' : null);
                         if (!badge) return null;
-                        const cfg = CATEGORY_CONFIG[badge as 'active' | 'abandoned' | 'all'];
+                        const cfg = CATEGORY_CONFIG[badge as 'active' | 'inactive' | 'all'];
                         return (
                           <span className={`text-[8px] font-headline font-bold px-1 ${cfg.color} ${cfg.bgColor} border ${cfg.borderColor}`}>
                             {badge.toUpperCase()}
@@ -277,12 +337,24 @@ export function PoolsScreen() {
                 <tr className="border-b border-outline-variant/20">
                   <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3">Pool</th>
                   <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3">DEX</th>
-                  <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">TVL</th>
-                  <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">24H Vol</th>
-                  <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">24H Change</th>
-                  <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">24H Txns</th>
-                  <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">Price</th>
-                  <th className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right">Impact ($100)</th>
+                  <th onClick={() => handleSort('tvl')} className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right cursor-pointer hover:text-primary transition-colors">
+                    TVL <SortIndicator column="tvl" />
+                  </th>
+                  <th onClick={() => handleSort('volume24h')} className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right cursor-pointer hover:text-primary transition-colors">
+                    24H Vol <SortIndicator column="volume24h" />
+                  </th>
+                  <th onClick={() => handleSort('change24h')} className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right cursor-pointer hover:text-primary transition-colors">
+                    24H Change <SortIndicator column="change24h" />
+                  </th>
+                  <th onClick={() => handleSort('txns24h')} className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right cursor-pointer hover:text-primary transition-colors">
+                    24H Txns <SortIndicator column="txns24h" />
+                  </th>
+                  <th onClick={() => handleSort('price')} className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right cursor-pointer hover:text-primary transition-colors">
+                    Price <SortIndicator column="price" />
+                  </th>
+                  <th onClick={() => handleSort('impact')} className="font-headline text-[10px] uppercase tracking-widest text-on-surface-variant px-4 py-3 text-right cursor-pointer hover:text-primary transition-colors">
+                    Impact ($100) <SortIndicator column="impact" />
+                  </th>
                   <th className="px-4 py-3 text-center">Actions</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -297,7 +369,7 @@ export function PoolsScreen() {
                   const price = parseFloat(pool.priceUsd || '0');
                   const poolName = `${pool.baseToken?.symbol || '?'}/${pool.quoteToken?.symbol || '?'}`;
                   const refImpact = tvl > 0 ? calcPriceImpact(100, tvl / 2) : 0;
-                  const poolCategory = (pool as DexPair & { _category?: 'active' | 'abandoned' })._category;
+                  const poolCategory = (pool as DexPair & { _category?: 'active' | 'inactive' })._category;
 
                   return (
                     <tr key={pool.pairAddress} className={`border-b border-outline-variant/5 hover:bg-surface-container-high transition-colors ${i === 0 ? 'bg-primary/5' : ''}`}>
@@ -307,7 +379,7 @@ export function PoolsScreen() {
                           {(() => {
                             const badge = poolCategory || (tvl > 0 ? 'active' : null);
                             if (!badge) return null;
-                            const cfg = CATEGORY_CONFIG[badge as 'active' | 'abandoned' | 'all'];
+                            const cfg = CATEGORY_CONFIG[badge as 'active' | 'inactive' | 'all'];
                             return (
                               <span className={`text-[8px] font-headline font-bold px-1 ${cfg.color} ${cfg.bgColor} border ${cfg.borderColor}`}>
                                 {badge.toUpperCase()}

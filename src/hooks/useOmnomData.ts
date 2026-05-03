@@ -355,6 +355,12 @@ export function useOmnomData() {
     const factoryPools = factoryScanQuery.data ?? [];
     const dexScreenerAddresses = new Set(dexPairs.map(p => p.pairAddress.toLowerCase()));
 
+    // Ensure all DexScreener pools have _category set based on TVL
+    const categorizedDexPairs = dexPairs.map(pool => ({
+      ...pool,
+      _category: (pool.liquidity?.usd || 0) > 0 ? 'active' : 'inactive' as const,
+    })) as (DexPair & { _category: 'active' | 'inactive' })[];
+
     // Add factory-scanned pools not in DexScreener
     const additionalPools = factoryPools
       .filter(fp => !dexScreenerAddresses.has(fp.pairAddress.toLowerCase()))
@@ -388,9 +394,9 @@ export function useOmnomData() {
         _category: fp.category,
         _totalSupply: fp.totalSupply?.toString() || '0',
         _creationBlock: undefined,
-      } as DexPair & { _factoryScanned?: boolean; _category?: 'active' | 'abandoned'; _totalSupply?: string; _creationBlock?: number }));
+      } as DexPair & { _factoryScanned?: boolean; _category: 'active' | 'inactive'; _totalSupply?: string; _creationBlock?: number }));
 
-    return [...dexPairs, ...additionalPools];
+    return [...categorizedDexPairs, ...additionalPools];
   }, [dexQuery.data, factoryScanQuery.data]);
 
   // Primary pair = highest-liquidity OMNOM/WWDOGE pair (DexScreener sorts by liquidity)

@@ -101,7 +101,7 @@ export interface FactoryPool {
   reserve0: bigint;
   reserve1: bigint;
   totalSupply: bigint;
-  category: 'active' | 'abandoned';
+  category: 'active' | 'inactive';
   isNew?: boolean; // Discovered by delta scan, not in hardcoded list
 }
 
@@ -173,7 +173,7 @@ async function deltaScanNewPools(
             reserve0: 0n,
             reserve1: 0n,
             totalSupply: 0n,
-            category: 'abandoned' as const,
+            category: 'inactive' as const,
             isNew: true,
           });
 
@@ -247,7 +247,7 @@ export async function scanFactoriesForOmnomPools(): Promise<FactoryPool[]> {
       pool.reserve0 = r.reserve0;
       pool.reserve1 = r.reserve1;
       pool.totalSupply = r.totalSupply;
-      pool.category = r.hasLiquidity ? 'active' : 'abandoned';
+      pool.category = r.hasLiquidity ? 'active' : 'inactive';
     }
   }
 
@@ -264,7 +264,7 @@ export async function scanFactoriesForOmnomPools(): Promise<FactoryPool[]> {
           newPools[i].reserve0 = nr.reserve0;
           newPools[i].reserve1 = nr.reserve1;
           newPools[i].totalSupply = nr.totalSupply;
-          newPools[i].category = nr.hasLiquidity ? 'active' : 'abandoned';
+          newPools[i].category = nr.hasLiquidity ? 'active' : 'inactive';
         }
         poolsByAddress.set(newPools[i].pairAddress.toLowerCase(), newPools[i]);
       }
@@ -278,9 +278,9 @@ export async function scanFactoriesForOmnomPools(): Promise<FactoryPool[]> {
 
   const allPools = Array.from(poolsByAddress.values());
   const active = allPools.filter(p => p.category === 'active').length;
-  const abandoned = allPools.filter(p => p.category === 'abandoned').length;
+  const inactive = allPools.filter(p => p.category === 'inactive').length;
 
-  console.log(`[PoolScanner] Total: ${allPools.length} pools (${active} active, ${abandoned} abandoned)`);
+  console.log(`[PoolScanner] Total: ${allPools.length} pools (${active} active, ${inactive} inactive)`);
 
   cachedPools = { pools: allPools, timestamp: now };
   saveToStorage(cachedPools);

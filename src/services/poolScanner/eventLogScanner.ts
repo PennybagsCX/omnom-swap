@@ -5,7 +5,7 @@
  * Event logs contain EVERY pair ever created, including:
  * - Active pools (has liquidity)
  * - Empty pools (created but no liquidity)
- * - Abandoned pools (created but never used, or rugpulled)
+ * - Inactive pools (created but never used, or rugpulled)
  *
  * Strategy:
  * 1. Scan PairCreated events from each factory contract
@@ -54,7 +54,7 @@ type CachedEventPools = {
 let cachedPools: CachedEventPools | null = null;
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (event logs are immutable)
 
-const STORAGE_KEY = 'omnom_event_pools_v2'; // v2: removed 'empty' category (merged into 'abandoned')
+const STORAGE_KEY = 'omnom_event_pools_v2'; // v2: removed 'empty' category (merged into 'inactive')
 
 // Serialize: bigint → string
 function serializePools(pools: EventPool[]): string {
@@ -110,12 +110,12 @@ export interface EventPool {
   hasReserves: boolean;
   hasLiquidity: boolean;
   totalSupply: bigint;
-  category: 'active' | 'abandoned';
+  category: 'active' | 'inactive';
 }
 
 /**
  * Scan PairCreated events from all factories to find ALL OMNOM pairs.
- * This finds inactive, empty, and abandoned pools that DexScreener misses.
+ * This finds inactive, empty, and inactive pools that DexScreener misses.
  */
 export async function scanEventLogsForOmnomPools(): Promise<EventPool[]> {
   const now = Date.now();
@@ -178,7 +178,7 @@ export async function scanEventLogsForOmnomPools(): Promise<EventPool[]> {
           let hasReserves = false;
           let hasLiquidity = false;
           let totalSupply = 0n;
-          let category: EventPool['category'] = 'abandoned';
+          let category: EventPool['category'] = 'inactive';
 
           try {
             const [reserves, supply] = await Promise.all([
@@ -200,12 +200,12 @@ export async function scanEventLogsForOmnomPools(): Promise<EventPool[]> {
               hasReserves = true;
               hasLiquidity = reserve0 > 0n || reserve1 > 0n;
 
-              // Categorize pool (empty pools merged into abandoned)
-              category = hasLiquidity ? 'active' : 'abandoned';
+              // Categorize pool (empty pools merged into inactive)
+              category = hasLiquidity ? 'active' : 'inactive';
             }
           } catch {
             // Contract doesn't exist or failed to read
-            category = 'abandoned';
+            category = 'inactive';
           }
 
           allPools.push({
@@ -232,7 +232,7 @@ export async function scanEventLogsForOmnomPools(): Promise<EventPool[]> {
 
   console.log(`[EventLogScanner] Total OMNOM pairs found: ${allPools.length}`);
   console.log(`  Active: ${allPools.filter(p => p.category === 'active').length}`);
-  console.log(`  Abandoned: ${allPools.filter(p => p.category === 'abandoned').length}`);
+  console.log(`  Inactive: ${allPools.filter(p => p.category === 'inactive').length}`);
 
   // Cache results (memory + localStorage)
   cachedPools = { pools: allPools, timestamp: now };

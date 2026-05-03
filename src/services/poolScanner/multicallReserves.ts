@@ -25,7 +25,7 @@ export interface PoolReserves {
   reserve1: bigint;
   totalSupply: bigint;
   hasLiquidity: boolean;
-  category: 'active' | 'abandoned';
+  category: 'active' | 'inactive';
 }
 
 const client = createPublicClient({
@@ -89,7 +89,7 @@ export async function fetchAllReserves(pairAddresses: string[]): Promise<PoolRes
         reserve1,
         totalSupply,
         hasLiquidity,
-        category: hasLiquidity ? 'active' : 'abandoned',
+        category: hasLiquidity ? 'active' : 'inactive',
       });
     }
   }

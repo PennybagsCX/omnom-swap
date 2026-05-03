@@ -6,7 +6,7 @@
 
 OmnomSwap is a multi-DEX aggregator that scans all active UniswapV2-fork DEXes on [Dogechain](https://dogechain.dog) to find the optimal swap price. It combines an on-chain aggregator contract, an off-chain pathfinder, and a React frontend into a single integrated system.
 
-**Live Demo:** [https://omnomswap.com](https://omnomswap.com) (or use the Vercel deployment linked to this repository)
+**Live Demo:** [https://omnom-swap.vercel.app](https://omnom-swap.vercel.app) (or use the Vercel deployment linked to this repository)
 
 ## Table of Contents
 
@@ -491,7 +491,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Links
 
-- **Website:** [https://omnomswap.com](https://omnomswap.com)
+- **Website:** [https://omnom-swap.vercel.app](https://omnom-swap.vercel.app)
 - **Dogechain Explorer:** [https://explorer.dogechain.dog](https://explorer.dogechain.dog)
 - **Contract:** `0x88F81031b258A0Fb789AC8d3A8071533BFADeC14`
 - **Treasury:** `0x628f3F4A82791D1d6dEC2Aebe7d648e53fF4FA88`

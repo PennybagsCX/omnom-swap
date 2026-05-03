@@ -62,6 +62,13 @@ TOKEN IMAGES/
 /*.png
 /*.jpg
 /*.jpeg
+test-screenshots/
+COMPREHENSIVE_E2E_TEST_REPORT.md
+
+# Plans & session artifacts
+plans/
+console-log.md
+console2.md
 
 # Foundry artifacts (deployment artifacts, compilation cache, build output)
 broadcast/

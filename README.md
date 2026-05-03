@@ -1,8 +1,8 @@
 # OmnomSwap - DEX Aggregator on Dogechain
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/ci.yml/badge.svg)](https://github.com/OMNOM-SWAP/omnom-swap/actions)
-[![Dogechain](https://img.shields.io/badge/Network-Dogechain-87V第一名?style=flat-square&logo=coindesk)](https://dogechain.dog)
+[![CI](https://img.shields.io/github/actions/workflow/status/PennybagsCX/omnom-swap/ci.yml/badge.svg)](https://github.com/PennybagsCX/omnom-swap/actions)
+[![Dogechain](https://img.shields.io/badge/Network-Dogechain-87CEEB?style=flat-square)](https://dogechain.dog)
 
 OmnomSwap is a multi-DEX aggregator that scans all active UniswapV2-fork DEXes on [Dogechain](https://dogechain.dog) to find the optimal swap price. It combines an on-chain aggregator contract, an off-chain pathfinder, and a React frontend into a single integrated system.
 
@@ -27,7 +27,7 @@ OmnomSwap is a multi-DEX aggregator that scans all active UniswapV2-fork DEXes o
 
 ```bash
 # Clone the repository
-git clone https://github.com/OMNOM-SWAP/omnom-swap.git
+git clone https://github.com/PennybagsCX/omnom-swap.git
 cd omnom-swap
 
 # Install frontend dependencies
@@ -246,7 +246,7 @@ forge verify-contract <AGGREGATOR_ADDRESS> \
 
 ### Smart Contract Tests (Foundry)
 
-**149 tests across 6 test suites** covering all contract functionality:
+**171 tests across 8 test suites** covering all contract functionality:
 
 ```bash
 # Run all tests with verbose output
@@ -254,8 +254,8 @@ forge test -vvv
 
 # Run specific test suites
 forge test --match-contract OmnomSwapAggregatorTest -vvv
-forge test --match-contract FeeDistributionTest -vvv
-forge test --match-contract MultiHopRoutingTest -vvv
+forge test --match-contract ComprehensiveRoutesTest -vvv
+forge test --match-contract ExtremeConditionsTest -vvv
 
 # Run with gas reporting
 forge test --gas-report
@@ -266,11 +266,13 @@ forge test --gas-report
 | Test File | Tests | Coverage |
 |---|---|---|
 | `OmnomSwapAggregator.t.sol` | 49 | Deployment, access control, router management, swap execution |
+| `ComprehensiveRoutes.t.sol` | 26 | Native DOGE swaps, WWDOGE swaps, multi-DEX routes, edge cases, balance assertions |
+| `ExtremeConditions.t.sol` | 26 | Price shifts, MEV front-running, network congestion, approval edge cases, reentrancy |
 | `FeeDistribution.t.sol` | 22 | Fee calculations at various bps, treasury updates, edge cases |
+| `FlipSwapConsistency.t.sol` | 15 | Flip/swap consistency, decimal mismatch, fee deduction, round-trip |
 | `MultiHopRouting.t.sol` | 16 | Multi-hop swaps, cross-DEX routing, split routing, slippage |
-| `SwapResilience.t.sol` | Various | Extreme conditions, resilience testing |
-| `PathFinder.test.ts` | Various | Off-chain pathfinding logic |
-| `poolFetcher.test.ts` | Various | Pool data fetching |
+| `NativeDogeSwap.t.sol` | 10 | Native DOGE wrapping, unwrapping, ETH-style router compatibility |
+| `FeeOnTransferStep0.t.sol` | 7 | Fee-on-transfer token handling, balance diff measurement |
 
 ### Frontend Tests (Vitest + Playwright)
 
@@ -313,13 +315,15 @@ npm run build
 ### Features
 
 - **Swap Interface** - Token swapping with real-time price quotes across all DEXes
-- **Route Visualization** - Visual display of the optimal swap route
+- **Route Visualization** - Visual display of the optimal swap route with hop-by-hop breakdown
 - **Price Comparison** - Side-by-side price comparison across DEXes
 - **Liquidity Pools** - View pool TVL, add/remove liquidity on any supported DEX
 - **Market Stats** - Live price, volume, FDV, buy/sell ratios, MEXC CEX data
 - **Swap History** - On-chain trade feed with pagination
 - **Treasury Dashboard** - Protocol fee collection statistics
-- **Testing Dashboard** - Contract integration testing UI
+- **Token Safety** - Honeypot detection, tax analysis, warning banners for risky tokens
+- **Auto Slippage** - Dynamic slippage calculation based on price impact, hops, pool depth, and token taxes
+- **Monitoring** - Real-time swap monitoring overlay with alerts
 - **Wallet Integration** - MetaMask, Coinbase Wallet, Rabby, Trust Wallet, WalletConnect
 
 ---
@@ -336,48 +340,68 @@ omnom-swap/
 │
 ├── script/
 │   ├── Deploy.s.sol                # Deployment script (deploy + register routers)
-│   └── Setup.s.sol                 # Post-deployment configuration script
+│   ├── Setup.s.sol                 # Post-deployment configuration script
+│   └── AddBreadFactory.s.sol       # Add BreadFactory as token source
 │
 ├── test/
 │   ├── OmnomSwapAggregator.t.sol  # Core contract tests (49 tests)
-│   ├── FeeDistribution.t.sol       # Fee mechanism tests (22 tests)
-│   ├── MultiHopRouting.t.sol       # Multi-hop routing tests (16 tests)
-│   ├── SwapResilience.t.sol        # Resilience and edge case tests
-│   ├── *.test.ts                   # Frontend unit tests (Vitest)
-│   └── *.test.ts                   # E2E tests (Playwright)
+│   ├── ComprehensiveRoutes.t.sol  # Route coverage tests (26 tests)
+│   ├── ExtremeConditions.t.sol    # Stress & security tests (26 tests)
+│   ├── FeeDistribution.t.sol      # Fee mechanism tests (22 tests)
+│   ├── FlipSwapConsistency.t.sol  # Flip/swap consistency tests (15 tests)
+│   ├── MultiHopRouting.t.sol      # Multi-hop routing tests (16 tests)
+│   ├── NativeDogeSwap.t.sol       # Native DOGE swap tests (10 tests)
+│   ├── FeeOnTransferStep0.t.sol   # Fee-on-transfer tests (7 tests)
+│   └── *.test.ts                  # Frontend unit tests (Vitest)
 │
 ├── src/
 │   ├── components/
 │   │   ├── SwapScreen.tsx          # Main swap UI
 │   │   ├── PoolsScreen.tsx         # Liquidity pool management
-│   │   ├── StatsScreen.tsx         # Market statistics
-│   │   ├── Header.tsx              # Navigation header
-│   │   ├── Footer.tsx              # Footer with links
+│   │   ├── LiquidityModal.tsx      # Add/remove liquidity modal
+│   │   ├── MonitorOverlay.tsx      # Real-time swap monitoring
 │   │   └── aggregator/             # Aggregator-specific components
 │   │       ├── AggregatorSwap.tsx  # Aggregator swap interface
 │   │       ├── PriceComparison.tsx # Cross-DEX price comparison
 │   │       ├── RouteVisualization.tsx
-│   │       ├── SwapHistory.tsx
-│   │       ├── TreasuryDashboard.tsx
+│   │       ├── RouteComparisonCard.tsx
 │   │       ├── TokenSelector.tsx
-│   │       └── TestingDashboard.tsx
+│   │       ├── TokenWarningBanner.tsx
+│   │       ├── EducationPanel.tsx
+│   │       ├── SwapHistory.tsx
+│   │       └── TreasuryDashboard.tsx
 │   │
 │   ├── hooks/
 │   │   ├── useAggregator/          # Aggregator contract hooks
 │   │   │   ├── useAggregatorContract.ts
 │   │   │   ├── useRoute.ts
 │   │   │   ├── useSwap.ts
+│   │   │   ├── usePreFlightValidation.ts
+│   │   │   ├── useReverseRoute.ts
 │   │   │   └── useTokenBalances.ts
+│   │   ├── useAutoSlippage.ts      # Dynamic slippage calculation
+│   │   ├── useDynamicSlippage.ts   # TVL-aware slippage
+│   │   ├── useGasEstimate.ts       # Gas estimation with debouncing
 │   │   ├── useLiquidity.ts         # Liquidity management
 │   │   ├── useOmnomData.ts         # Market data
 │   │   ├── useTokenPrices.ts       # Price fetching
-│   │   └── useNewPairMonitor.ts    # New pair detection
+│   │   └── useTokenTax.ts          # Token tax/honeypot detection
 │   │
 │   ├── services/
-│   │   └── pathFinder/             # Off-chain optimal routing engine
-│   │       ├── index.ts
-│   │       ├── poolFetcher.ts
-│   │       └── types.ts
+│   │   ├── pathFinder/             # Off-chain optimal routing engine
+│   │   │   ├── index.ts
+│   │   │   ├── poolFetcher.ts
+│   │   │   └── types.ts
+│   │   ├── monitoring/             # Real-time swap monitoring
+│   │   ├── poolScanner/            # Pool discovery & indexing
+│   │   ├── taxDetection.ts         # Token tax detection
+│   │   └── liquidityFilter.ts      # Pool liquidity filtering
+│   │
+│   ├── utils/
+│   │   ├── addressValidation.ts    # Address checksumming & validation
+│   │   ├── errors.ts               # Typed error classes (SwapError, etc.)
+│   │   ├── logger.ts               # Environment-aware logging
+│   │   └── rateLimiter.ts          # Rate limiting for API/RPC calls
 │   │
 │   ├── lib/
 │   │   ├── constants.ts            # Contract addresses, DEX config, ABIs
@@ -394,6 +418,8 @@ omnom-swap/
 │   ├── SECURITY_AUDIT.md           # Security audit
 │   ├── MEV_PROTECTION_AUDIT.md     # MEV protection analysis
 │   ├── PRODUCTION_AUDIT.md         # Production readiness audit
+│   ├── BREADFACTORY_AUDIT.md       # BreadFactory integration audit
+│   ├── PRICE_IMPACT_AUDIT.md       # Price impact calculation audit
 │   └── NEXT_STEPS.md              # Future improvements
 │
 └── public/

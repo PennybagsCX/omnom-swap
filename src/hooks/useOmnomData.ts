@@ -14,13 +14,12 @@
  *   - Module-level queue prevents request stampede
  *   - On 429: retries up to 3 times with backoff before giving up
  *
- * DexScreener /orders does NOT work on dogechain — returns 404 for all requests.
- * Only used for price/volume stats, not trades.
+ * DexScreener is used only for price/volume stats, not trades.
  */
 
 import { useCallback, useMemo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { CONTRACTS, OMNOM_WWDOGE_POOL } from '../lib/constants';
+import { CONTRACTS } from '../lib/constants';
 import { scanFactoriesForOmnomPools } from '../services/poolScanner';
 
 const DEXSCREENER_URL = 'https://api.dexscreener.com/latest/dex/tokens';
@@ -399,9 +398,8 @@ export function useOmnomData() {
     ? (allPools.find(p => p.quoteToken?.symbol === 'WWDOGE' || p.baseToken?.symbol === 'WWDOGE') ?? allPools[0])
     : undefined;
 
-  // ── GeckoTerminal Trades Query (PRIMARY trades source) ─────────────────────
+  // ── GeckoTerminal Trades Query ────────────────────────────────────────────
   // GeckoTerminal works on dogechain and returns 200 with full trade data
-  // DexScreener /orders returns 404 for dogechain, so we use GeckoTerminal directly
 
   const geckoTradesQuery = useQuery({
     queryKey: ['omnomGeckoTrades', primaryPair?.pairAddress],
@@ -417,51 +415,6 @@ export function useOmnomData() {
 
   const geckoTrades = geckoTradesQuery.data ?? [];
 
-  // ── Multi-pool Activity from DexScreener ────────────────────────────────────
-  // Get trade activity from other active pools (not primary pair)
-
-  const activePoolOrdersQuery = useQuery({
-    queryKey: ['omnomActivePoolOrders', pairs.length],
-    queryFn: async (): Promise<Trade[]> => {
-      const primaryAddr = OMNOM_WWDOGE_POOL.toLowerCase();
-      const activePools = pairs
-        .filter(p => {
-          const txns = (p.txns?.h24?.buys || 0) + (p.txns?.h24?.sells || 0);
-          return txns > 0 && p.pairAddress?.toLowerCase() !== primaryAddr;
-        })
-        .sort((a, b) => {
-          const aT = (a.txns?.h24?.buys || 0) + (a.txns?.h24?.sells || 0);
-          const bT = (b.txns?.h24?.buys || 0) + (b.txns?.h24?.sells || 0);
-          return bT - aT;
-        })
-        .slice(0, 3);
-
-      // Get orders from DexScreener for active pools (if supported)
-      // Note: DexScreener /orders returns 404 on dogechain, but we try anyway
-      const poolOrders: Trade[] = [];
-      for (const pool of activePools) {
-        const poolAddr = pool.pairAddress;
-        if (!poolAddr) continue;
-        try {
-          const res = await fetch(`${DEXSCREENER_URL}/${pool.baseToken.address}/orders?chain=dogechain&limit=5`);
-          if (!res.ok) continue;
-          const json = await res.json();
-          const orders = json.orders || [];
-          if (orders.length > 0) {
-            console.log(`[PoolOrders] Pool ${poolAddr}: DexScreener fetched ${orders.length} orders`);
-            poolOrders.push(...orders.map(mapDexOrderToTrade));
-          }
-        } catch { /* skip failed pool fetch */ }
-      }
-      return poolOrders;
-    },
-    staleTime: 60_000,
-    refetchInterval: false, // No automatic refresh — manual only
-    enabled: pairs.length > 0,
-  });
-
-  const activePoolOrders = activePoolOrdersQuery.data ?? [];
-
   // ── Load More Trades ─────────────────────────────────────────────────────────
 
   const hasMoreTrades = geckoTrades.length >= TRADES_PAGE_SIZE;
@@ -473,11 +426,9 @@ export function useOmnomData() {
   }, []);
 
   // ── Combine All Trades (deduplicated) ───────────────────────────────────────
-  // Primary source: GeckoTerminal trades
-  // Secondary source: active pool orders from DexScreener (if available)
 
   const seen = new Set<string>();
-  const allTrades = [...geckoTrades, ...activePoolOrders]
+  const allTrades = geckoTrades
     .filter(tx => {
       if (!tx.tx_hash || seen.has(tx.tx_hash)) return false;
       seen.add(tx.tx_hash);
@@ -531,7 +482,8 @@ export function useOmnomData() {
 
   // ── Loading State ────────────────────────────────────────────────────────────
 
-  const isLoading = dexQuery.isLoading || factoryScanQuery.isLoading;
+  // Only block on DexScreener — factory scan runs in background (1,800+ RPC calls)
+  const isLoading = dexQuery.isLoading;
   const isTradesLoading = geckoTradesQuery.isLoading;
 
   return {
@@ -569,31 +521,5 @@ export function useOmnomData() {
     poolError: dexQuery.error,
     tradesError: geckoTradesQuery.error,
     poolsListError: dexQuery.error,
-  };
-}
-
-// Helper function to map DexOrder to Trade (kept for potential future use)
-function mapDexOrderToTrade(order: {
-  side?: string;
-  maker?: { address?: string };
-  fromTokenAmount?: string;
-  toTokenAmount?: string;
-  fromToken_usdAmount?: string;
-  toToken_usdAmount?: string;
-  txHash?: string;
-  blockTimestamp?: number;
-}): Trade {
-  return {
-    kind: order.side || '',
-    tx_from_address: order.maker?.address || '',
-    volume_in_usd: order.fromToken_usdAmount || order.toToken_usdAmount || '0',
-    tx_hash: order.txHash || '',
-    block_timestamp: order.blockTimestamp ? new Date(order.blockTimestamp * 1000).toISOString() : '',
-    from_token_amount: order.fromTokenAmount || '0',
-    to_token_amount: order.toTokenAmount || '0',
-    from_token_address: '',
-    to_token_address: '',
-    price_from_in_usd: order.fromToken_usdAmount || '0',
-    price_to_in_usd: order.toToken_usdAmount || '0',
   };
 }

@@ -19,7 +19,6 @@
 import { useState, useCallback } from 'react';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import { erc20Abi, parseAbi, type Address } from 'viem';
-import { CONTRACTS, getTokenDecimals } from '../lib/constants';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -35,8 +34,6 @@ const FALLBACK_GAS_LIMIT = 350000n;
 /** Maximum gas cap. */
 const MAX_GAS_CAP = 1_000_000n;
 
-/** Default deadline in seconds from now (5 minutes). */
-const DEFAULT_DEADLINE_SECONDS = 300;
 
 // ─── Router ABI ────────────────────────────────────────────────────────────────
 

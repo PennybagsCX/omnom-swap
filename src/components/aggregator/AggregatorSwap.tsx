@@ -162,7 +162,7 @@ export function AggregatorSwap({ walletScan }: { walletScan: WalletScanResult })
   const { sellTax, buyTax } = useSwapTokenTax(sellToken.address, buyToken.address);
 
   // Token compatibility check — detects transfer restrictions
-  const { checkCompatibility, result: compatibilityResult, isChecking: isCheckingCompatibility } = useTokenCompatibilityCheck();
+  const { checkCompatibility } = useTokenCompatibilityCheck();
   const [tokenCompatibility, setTokenCompatibility] = useState<TokenCompatibilityResult | null>(null);
 
   // Confirmation modal

@@ -3,7 +3,7 @@
  *
  * Standalone script that can be pasted into the browser console to diagnose
  * wallet provider conflicts. Detects all injected providers on `window`,
- * identifies MetaMask and other wallet extensions, checks if `window.ethereum`
+ * identifies MetaMask and other wallet extensions, checks if `w.ethereum`
  * is a getter or regular property, and reports the conflict situation.
  *
  * Usage:
@@ -19,8 +19,14 @@
  * any server-side dependencies. It only inspects `window` objects.
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+declare const getEventListeners: any;
+
 (function diagnoseProviderConflict() {
   'use strict';
+
+  // Typed window reference for browser-only properties (ethereum, ethereumproviders)
+  const w = window as any;
 
   // ═══════════════════════════════════════════════════════════════════════
   // Utility Helpers
@@ -29,19 +35,19 @@
   const SEPARATOR = '─'.repeat(60);
   const HEADER = '═'.repeat(60);
 
-  function logHeader(title) {
+  function logHeader(title: string) {
     console.log(`\n${HEADER}`);
     console.log(`  ${title}`);
     console.log(`${HEADER}`);
   }
 
-  function logSection(title) {
+  function logSection(title: string) {
     console.log(`\n${SEPARATOR}`);
     console.log(`  ${title}`);
     console.log(`${SEPARATOR}`);
   }
 
-  function logResult(label, value, status) {
+  function logResult(label: string, value: string, status: string) {
     const icon = status === 'ok' ? '✅' : status === 'warn' ? '⚠️' : status === 'fail' ? '❌' : 'ℹ️';
     console.log(`  ${icon} ${label}: ${value}`);
   }
@@ -77,34 +83,34 @@
 
   logSection('Phase 1: Injected Provider Detection');
 
-  // Check window.ethereum
-  const hasEthereum = typeof window.ethereum !== 'undefined';
-  logResult('window.ethereum exists', hasEthereum ? 'YES' : 'NO', hasEthereum ? 'ok' : 'fail');
+  // Check w.ethereum
+  const hasEthereum = typeof w.ethereum !== 'undefined';
+  logResult('w.ethereum exists', hasEthereum ? 'YES' : 'NO', hasEthereum ? 'ok' : 'fail');
 
   if (hasEthereum) {
-    // Check if window.ethereum is a getter or regular property
+    // Check if w.ethereum is a getter or regular property
     const descriptor = Object.getOwnPropertyDescriptor(window, 'ethereum');
     if (descriptor) {
       const isGetter = typeof descriptor.get === 'function';
       const isSetter = typeof descriptor.set === 'function';
-      logResult('window.ethereum is getter', isGetter ? 'YES' : 'NO', isGetter ? 'warn' : 'info');
+      logResult('w.ethereum is getter', isGetter ? 'YES' : 'NO', isGetter ? 'warn' : 'info');
       if (isGetter) {
         console.log('    → A getter means a wallet extension is intercepting access');
         console.log('    → This can cause conflicts when multiple wallets are installed');
       }
-      logResult('window.ethereum is setter', isSetter ? 'YES' : 'NO', 'info');
-      logResult('window.ethereum is configurable', descriptor.configurable ? 'YES' : 'NO', 'info');
+      logResult('w.ethereum is setter', isSetter ? 'YES' : 'NO', 'info');
+      logResult('w.ethereum is configurable', descriptor.configurable ? 'YES' : 'NO', 'info');
     } else {
-      logResult('window.ethereum property descriptor', 'NOT FOUND (inherited)', 'warn');
+      logResult('w.ethereum property descriptor', 'NOT FOUND (inherited)', 'warn');
     }
   }
 
-  // Check window.ethereumproviders (plural, used by some extensions)
-  const hasEthereumProviders = typeof window.ethereumproviders !== 'undefined';
-  logResult('window.ethereumproviders exists', hasEthereumProviders ? 'YES' : 'NO', hasEthereumProviders ? 'warn' : 'info');
+  // Check w.ethereumproviders (plural, used by some extensions)
+  const hasEthereumProviders = typeof w.ethereumproviders !== 'undefined';
+  logResult('w.ethereumproviders exists', hasEthereumProviders ? 'YES' : 'NO', hasEthereumProviders ? 'warn' : 'info');
 
   if (hasEthereumProviders) {
-    const providers = window.ethereumproviders;
+    const providers = w.ethereumproviders;
     if (Array.isArray(providers)) {
       console.log(`    → ${providers.length} provider(s) detected:`);
       providers.forEach((p, i) => {
@@ -116,9 +122,9 @@
   }
 
   // Check for provider events
-  if (hasEthereum && window.ethereum.providers) {
-    logResult('window.ethereum.providers array', `${window.ethereum.providers.length} provider(s)`, 'warn');
-    window.ethereum.providers.forEach((p, i) => {
+  if (hasEthereum && w.ethereum.providers) {
+    logResult('w.ethereum.providers array', `${w.ethereum.providers.length} provider(s)`, 'warn');
+    w.ethereum.providers.forEach((p: any, i: number) => {
       console.log(`    [${i}] ${identifyProvider(p)}`);
     });
   }
@@ -133,7 +139,7 @@
 
   if (hasEthereum) {
     for (const wallet of KNOWN_WALLETS) {
-      const isPresent = !!window.ethereum[wallet.flag];
+      const isPresent = !!w.ethereum[wallet.flag];
       if (isPresent) {
         detectedWallets.push(wallet.name);
         logResult(wallet.name, `detected (${wallet.flag} = true)`, 'warn');
@@ -143,11 +149,11 @@
     if (detectedWallets.length === 0) {
       logResult('Known wallets', 'none detected via standard flags', 'info');
       // Check for non-standard providers
-      const extraFlags = Object.keys(window.ethereum).filter(k => k.startsWith('is'));
+      const extraFlags = Object.keys(w.ethereum).filter(k => k.startsWith('is'));
       if (extraFlags.length > 0) {
         console.log('    → Non-standard flags found:', extraFlags.join(', '));
         extraFlags.forEach(flag => {
-          if (window.ethereum[flag] === true) {
+          if (w.ethereum[flag] === true) {
             console.log(`      ${flag} = true`);
           }
         });
@@ -160,7 +166,7 @@
       console.log('    → This is a common cause of transaction failures and wrong chain issues');
     }
   } else {
-    logResult('No wallets', 'window.ethereum is not available', 'fail');
+    logResult('No wallets', 'w.ethereum is not available', 'fail');
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -170,7 +176,7 @@
   logSection('Phase 3: Provider Details');
 
   if (hasEthereum) {
-    const provider = window.ethereum;
+    const provider = w.ethereum;
 
     // Chain ID
     if (provider.chainId) {
@@ -220,20 +226,20 @@
 
   if (hasEthereum) {
     // Check for chainChanged listeners
-    const chainListeners = getEventListeners?.(window.ethereum, 'chainChanged') || [];
+    const chainListeners = getEventListeners?.(w.ethereum, 'chainChanged') || [];
     logResult('chainChanged listeners', `${chainListeners.length} registered`, chainListeners.length > 0 ? 'ok' : 'warn');
 
     // Check for accountsChanged listeners
-    const accountListeners = getEventListeners?.(window.ethereum, 'accountsChanged') || [];
+    const accountListeners = getEventListeners?.(w.ethereum, 'accountsChanged') || [];
     logResult('accountsChanged listeners', `${accountListeners.length} registered`, accountListeners.length > 0 ? 'ok' : 'warn');
 
     // Check for disconnect listeners
-    const disconnectListeners = getEventListeners?.(window.ethereum, 'disconnect') || [];
+    const disconnectListeners = getEventListeners?.(w.ethereum, 'disconnect') || [];
     logResult('disconnect listeners', `${disconnectListeners.length} registered`, 'info');
 
     if (typeof getEventListeners !== 'function') {
       console.log('  ℹ️  getEventListeners() not available (only in Chrome DevTools)');
-      console.log('     To check manually: getEventListeners(window.ethereum)');
+      console.log('     To check manually: getEventListeners(w.ethereum)');
     }
   }
 
@@ -243,32 +249,32 @@
 
   logSection('Phase 5: Async Provider Test');
 
-  if (hasEthereum && typeof window.ethereum.request === 'function') {
+  if (hasEthereum && typeof w.ethereum.request === 'function') {
     // Test eth_chainId
-    window.ethereum.request({ method: 'eth_chainId' })
-      .then((chainId) => {
+    w.ethereum.request({ method: 'eth_chainId' })
+      .then((chainId: any) => {
         const decimal = parseInt(chainId, 16);
         logResult('eth_chainId (async)', `${chainId} (decimal: ${decimal})`, decimal === 2000 ? 'ok' : 'fail');
       })
-      .catch((err) => {
+      .catch((err: any) => {
         logResult('eth_chainId (async)', `FAILED: ${err.message}`, 'fail');
       });
 
     // Test eth_accounts
-    window.ethereum.request({ method: 'eth_accounts' })
-      .then((accounts) => {
+    w.ethereum.request({ method: 'eth_accounts' })
+      .then((accounts: any) => {
         logResult('eth_accounts', accounts.length > 0 ? accounts[0] : 'no accounts connected', accounts.length > 0 ? 'ok' : 'warn');
       })
-      .catch((err) => {
+      .catch((err: any) => {
         logResult('eth_accounts', `FAILED: ${err.message}`, 'fail');
       });
 
     // Test net_version
-    window.ethereum.request({ method: 'net_version' })
-      .then((version) => {
+    w.ethereum.request({ method: 'net_version' })
+      .then((version: any) => {
         logResult('net_version', version, version === '2000' ? 'ok' : 'fail');
       })
-      .catch((err) => {
+      .catch((err: any) => {
         logResult('net_version', `FAILED: ${err.message}`, 'fail');
       });
   }
@@ -283,7 +289,7 @@
   const recommendations = [];
 
   if (!hasEthereum) {
-    issues.push('No Ethereum provider detected on window.ethereum');
+    issues.push('No Ethereum provider detected on w.ethereum');
     recommendations.push('Install MetaMask or another compatible wallet extension');
   }
 
@@ -291,20 +297,20 @@
     issues.push(`Multiple wallets detected: ${detectedWallets.join(', ')}`);
     recommendations.push(`Priority recommendation: Use ${detectedWallets[0]} as the primary wallet`);
     recommendations.push('Disable other wallet extensions to prevent provider conflicts');
-    recommendations.push('Or use the wallet-specific provider directly instead of window.ethereum');
+    recommendations.push('Or use the wallet-specific provider directly instead of w.ethereum');
   }
 
   if (hasEthereum) {
     const descriptor = Object.getOwnPropertyDescriptor(window, 'ethereum');
     if (descriptor && typeof descriptor.get === 'function') {
-      issues.push('window.ethereum is a getter — last-loaded wallet wins');
-      recommendations.push('The wallet that loads last overrides window.ethereum');
-      recommendations.push('Consider using wallet-specific APIs (e.g., window.ethereum.providers[0])');
+      issues.push('w.ethereum is a getter — last-loaded wallet wins');
+      recommendations.push('The wallet that loads last overrides w.ethereum');
+      recommendations.push('Consider using wallet-specific APIs (e.g., w.ethereum.providers[0])');
     }
   }
 
-  if (hasEthereum && window.ethereum.chainId) {
-    const chainIdDecimal = parseInt(window.ethereum.chainId, 16);
+  if (hasEthereum && w.ethereum.chainId) {
+    const chainIdDecimal = parseInt(w.ethereum.chainId, 16);
     if (chainIdDecimal !== 2000) {
       issues.push(`Wrong chain: connected to chain ${chainIdDecimal}, expected 2000 (Dogechain)`);
       recommendations.push('Switch to Dogechain network in your wallet');
@@ -312,7 +318,7 @@
     }
   }
 
-  if (hasEthereum && !window.ethereum.selectedAddress) {
+  if (hasEthereum && !w.ethereum.selectedAddress) {
     issues.push('Wallet not connected — no account selected');
     recommendations.push('Call eth_requestAccounts to connect the wallet');
   }
@@ -341,14 +347,14 @@
   console.log('     4. Coinbase Wallet — uses different connection flow');
   console.log('');
   console.log('  🔧 To force a specific provider:');
-  console.log('     window.ethereum = window.ethereum.providers.find(p => p.isMetaMask);');
+  console.log('     w.ethereum = w.ethereum.providers.find(p => p.isMetaMask);');
   console.log('');
 
   // ═══════════════════════════════════════════════════════════════════════
   // Helper: Identify a provider object
   // ═══════════════════════════════════════════════════════════════════════
 
-  function identifyProvider(provider) {
+  function identifyProvider(provider: any) {
     if (!provider || typeof provider !== 'object') {
       return 'Unknown (not an object)';
     }

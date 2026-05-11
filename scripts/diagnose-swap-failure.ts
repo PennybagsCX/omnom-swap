@@ -78,10 +78,6 @@ const PAIR_ABI = parseAbi([
   'function totalSupply() view returns (uint256)',
 ]);
 
-const ROUTER_ABI = parseAbi([
-  'function getAmountsOut(uint256 amountIn, address[] calldata path) view returns (uint256[] memory amounts)',
-  'function WETH() view returns (address)',
-]);
 
 const AGGREGATOR_ABI = parseAbi([
   'function supportedRouters(address) view returns (bool)',
@@ -382,8 +378,9 @@ async function phase2_poolAnalysis(decimals: number) {
         addResult('reservesNonZero', true, 'PASS', 'Both reserves > 0');
       }
     } else {
-      console.log(`  ❌ Failed to read reserves: ${reservesRes.error}`);
-      addResult('getReserves', false, 'FAIL', undefined, reservesRes.error);
+      const reserveErr = !reservesRes.ok ? reservesRes.error : !token0Res.ok ? token0Res.error : !token1Res.ok ? token1Res.error : 'unknown error';
+      console.log(`  ❌ Failed to read reserves: ${reserveErr}`);
+      addResult('getReserves', false, 'FAIL', undefined, reserveErr);
     }
   } else {
     console.log('\n  ⚠️  No pool found on either factory — cannot analyze reserves');

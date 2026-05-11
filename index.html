@@ -27,6 +27,55 @@
     <!-- <link rel="apple-touch-icon" href="/apple-touch-icon.png" /> -->
     <!-- Favicon fallback -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐾</text></svg>">
+
+    <!--
+      Early wallet provider conflict protection.
+      This inline script runs BEFORE any module scripts to suppress known
+      errors from wallet extensions (SES lockdown, MetaMask inpage.js getter
+      conflict).  These errors are non-fatal but would otherwise appear as
+      uncaught exceptions in the console.
+    -->
+    <script>
+      (function () {
+        // Suppress SES lockdown errors (MetaMask LavaMoat/SES removing intrinsics)
+        window.addEventListener('error', function (e) {
+          var msg = e.message || '';
+          if (
+            msg.indexOf('SES lockdown') !== -1 ||
+            msg.indexOf('Removing unpermitted intrinsics') !== -1 ||
+            msg.indexOf('Lockdown failed') !== -1
+          ) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            console.warn('[OMNOM] Suppressed SES lockdown warning');
+          }
+        }, true);
+
+        // Suppress unhandled rejections from wallet extension content scripts
+        window.addEventListener('unhandledrejection', function (e) {
+          try {
+            var reason = e.reason;
+            var msg = (reason && reason.message) || '';
+            if (
+              msg.indexOf('Cannot set property ethereum') !== -1 ||
+              msg.indexOf('SES lockdown') !== -1
+            ) {
+              e.preventDefault();
+              console.warn('[OMNOM] Suppressed wallet provider error');
+            }
+          } catch (_) { /* ignore */ }
+        });
+
+        // Safely note whether window.ethereum is a getter (set by another
+        // extension like Rabby).  We never try to overwrite it.
+        try {
+          var desc = Object.getOwnPropertyDescriptor(window, 'ethereum');
+          if (desc && typeof desc.get === 'function') {
+            window.__OMNOM_ETHEREUM_IS_GETTER = true;
+          }
+        } catch (_) { /* ignore */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

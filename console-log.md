@@ -1,852 +1,645 @@
-lockdown-install.js:1 SES Removing unpermitted intrinsics\
-inpage.js:1 MetaMask encountered an error setting the global Ethereum provider - this is likely due to another Ethereum wallet extension also setting the global Ethereum provider: TypeError: Cannot set property ethereum of #&lt;Window&gt; which has only a getter\
-at a (inpage.js:1:147566)\
-at r.initializeProvider (inpage.js:1:147337)\
-at Object.&lt;anonymous&gt; (inpage.js:1:2296)\
-at Object.&lt;anonymous&gt; (inpage.js:1:6326)\
-at 2.../../shared/lib/provider-injection (inpage.js:1:6339)\
-at i (inpage.js:1:254)\
-at e (inpage.js:1:412)\
-at inpage.js:1:429\
-a @ inpage.js:1\
-r.initializeProvider @ inpage.js:1\
-(anonymous) @ inpage.js:1\
-(anonymous) @ inpage.js:1\
-2.../../shared/lib/provider-injection @ inpage.js:1\
-i @ inpage.js:1\
-e @ inpage.js:1\
-(anonymous) @ inpage.js:1\
-react-dom_client.js?v=ed503c83:20103 Download the React DevTools for a better development experience: <https://react.dev/link/react-devtools>\
-taxDetection.ts:180 \[taxDetection\] Loaded 2 cached entries from localStorage\
-taxDetection.ts:936 \[taxDetection\] Tax detection service initialized\
-index.ts:235 \[OMNOM Monitor\] Transaction monitoring installed. Use window.\__OMNOM_MONITOR for inspection.\
-monitor.ts:93 \[OMNOM Monitor\] Installed. Use window.\__OMNOM_DEBUG for interactive inspection.\
-useLiquidity.ts:158 \[useLpBalance\] useEffect fired {pairAddress: '(empty)', isConnected: true, address: '0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a'}\
-useLiquidity.ts:160 \[useLpBalance\] Skipping — missing: {pairAddress: 'MISSING', address: 'ok'}\
-(anonymous) @ useLiquidity.ts:160\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18567\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-commitHookEffectListMount @ react-dom_client.js?v=ed503c83:9411\
-commitHookPassiveMountEffects @ react-dom_client.js?v=ed503c83:9465\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11040\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11055\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11066\
-flushPassiveEffects @ react-dom_client.js?v=ed503c83:13150\
-(anonymous) @ react-dom_client.js?v=ed503c83:12776\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;LiquidityModal&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-$RefreshSig$ @ PoolsScreen.tsx:388\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18509\
-renderWithHooksAgain @ react-dom_client.js?v=ed503c83:5729\
-renderWithHooks @ react-dom_client.js?v=ed503c83:5665\
-updateFunctionComponent @ react-dom_client.js?v=ed503c83:7475\
-beginWork @ react-dom_client.js?v=ed503c83:8525\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-performUnitOfWork @ react-dom_client.js?v=ed503c83:12561\
-workLoopSync @ react-dom_client.js?v=ed503c83:12424\
-renderRootSync @ react-dom_client.js?v=ed503c83:12408\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11766\
-performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=ed503c83:13505\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;PoolsScreen&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ App.tsx:88\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18509\
-renderWithHooksAgain @ react-dom_client.js?v=ed503c83:5729\
-renderWithHooks @ react-dom_client.js?v=ed503c83:5665\
-updateFunctionComponent @ react-dom_client.js?v=ed503c83:7475\
-beginWork @ react-dom_client.js?v=ed503c83:8525\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-performUnitOfWork @ react-dom_client.js?v=ed503c83:12561\
-workLoopSync @ react-dom_client.js?v=ed503c83:12424\
-renderRootSync @ react-dom_client.js?v=ed503c83:12408\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11766\
-performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=ed503c83:13505\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;App&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ main.tsx:15\
-index.ts:203 \[PoolScanner\] Loading pools...\
-tokenDiscovery.ts:89 \[TokenDiscovery\] Returning cached registry\
-useLiquidity.ts:158 \[useLpBalance\] useEffect fired {pairAddress: '(empty)', isConnected: true, address: '0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a'}\
-useLiquidity.ts:160 \[useLpBalance\] Skipping — missing: {pairAddress: 'MISSING', address: 'ok'}\
-(anonymous) @ useLiquidity.ts:160\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18567\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-commitHookEffectListMount @ react-dom_client.js?v=ed503c83:9411\
-commitHookPassiveMountEffects @ react-dom_client.js?v=ed503c83:9465\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11273\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11317\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11265\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11317\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11317\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11317\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11265\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11265\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11317\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11265\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11317\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11265\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11265\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11265\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11317\
-recursivelyTraverseReconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11240\
-reconnectPassiveEffects @ react-dom_client.js?v=ed503c83:11317\
-doubleInvokeEffectsOnFiber @ react-dom_client.js?v=ed503c83:13339\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-recursivelyTraverseAndDoubleInvokeEffectsInDEV @ react-dom_client.js?v=ed503c83:13312\
-commitDoubleInvokeEffectsInDEV @ react-dom_client.js?v=ed503c83:13347\
-flushPassiveEffects @ react-dom_client.js?v=ed503c83:13157\
-(anonymous) @ react-dom_client.js?v=ed503c83:12776\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;LiquidityModal&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-$RefreshSig$ @ PoolsScreen.tsx:388\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18509\
-renderWithHooksAgain @ react-dom_client.js?v=ed503c83:5729\
-renderWithHooks @ react-dom_client.js?v=ed503c83:5665\
-updateFunctionComponent @ react-dom_client.js?v=ed503c83:7475\
-beginWork @ react-dom_client.js?v=ed503c83:8525\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-performUnitOfWork @ react-dom_client.js?v=ed503c83:12561\
-workLoopSync @ react-dom_client.js?v=ed503c83:12424\
-renderRootSync @ react-dom_client.js?v=ed503c83:12408\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11766\
-performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=ed503c83:13505\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;PoolsScreen&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ App.tsx:88\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18509\
-renderWithHooksAgain @ react-dom_client.js?v=ed503c83:5729\
-renderWithHooks @ react-dom_client.js?v=ed503c83:5665\
-updateFunctionComponent @ react-dom_client.js?v=ed503c83:7475\
-beginWork @ react-dom_client.js?v=ed503c83:8525\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-performUnitOfWork @ react-dom_client.js?v=ed503c83:12561\
-workLoopSync @ react-dom_client.js?v=ed503c83:12424\
-renderRootSync @ react-dom_client.js?v=ed503c83:12408\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11766\
-performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=ed503c83:13505\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;App&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ main.tsx:15\
-index.ts:229 \[PoolScanner\] 173 hardcoded pools loaded\
-index.ts:233 \[PoolScanner\] Fetching reserves for 173 pools via Multicall3...\
-index.ts:240 \[PoolScanner\] Multicall3 reserves fetch failed: InvalidAbiEncodingType: Type "tuple(address target, bool allowFailure, bytes callData)" is not a valid encoding type.\
-Please provide a valid ABI type.
+lockdown-install.js:1 SES Removing unpermitted intrinsics
+inpage.js:1 MetaMask encountered an error setting the global Ethereum provider - this is likely due to another Ethereum wallet extension also setting the global Ethereum provider: TypeError: Cannot set property ethereum of #<Window> which has only a getter
+    at a (inpage.js:1:147566)
+    at r.initializeProvider (inpage.js:1:147337)
+    at Object.<anonymous> (inpage.js:1:2296)
+    at Object.<anonymous> (inpage.js:1:6326)
+    at 2.../../shared/lib/provider-injection (inpage.js:1:6339)
+    at i (inpage.js:1:254)
+    at e (inpage.js:1:412)
+    at inpage.js:1:429
+a @ inpage.js:1
+r.initializeProvider @ inpage.js:1
+(anonymous) @ inpage.js:1
+(anonymous) @ inpage.js:1
+2.../../shared/lib/provider-injection @ inpage.js:1
+i @ inpage.js:1
+e @ inpage.js:1
+(anonymous) @ inpage.js:1
+react-dom_client.js?v=71323952:20103 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
+taxDetection.ts:180 [taxDetection] Loaded 1 cached entries from localStorage
+taxDetection.ts:936 [taxDetection] Tax detection service initialized
+index.ts:235 [OMNOM Monitor] Transaction monitoring installed. Use window.__OMNOM_MONITOR for inspection.
+monitor.ts:93 [OMNOM Monitor] Installed. Use window.__OMNOM_DEBUG for interactive inspection.
+index.ts:203 [PoolScanner] Loading pools...
+tokenDiscovery.ts:89 [TokenDiscovery] Returning cached registry
+index.ts:229 [PoolScanner] 173 hardcoded pools loaded
+index.ts:233 [PoolScanner] Fetching reserves for 173 pools via Multicall3...
+monitor.ts:126 [OK] DexScreener GET 200 79ms 0B 
+  https://api.dexscreener.com/latest/dex/tokens/0xe3fca919883950c5cd468156392a6477ff5d18de
+monitor.ts:126 [OK] MEXC GET 200 140ms 247B 
+  /api/mexc/api/v3/ticker/24hr?symbol=OMNOMUSDT
+useOmnomData.ts:153 [GeckoTrades] Persistent cache hit for pool 0x5bf60eA5cF2383F407f09CF38378176298238A6C
+monitor.ts:126 [OK] RPC POST 200 192ms 70B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 185ms 153B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 192ms 153B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 176ms 204B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] DexScreener GET 200 119ms 0B 
+  https://api.dexscreener.com/latest/dex/tokens/0x8aaa43cb85a3df81a359bf89cacad8019c8c06c8,0x3e96c2c408064b2936c4d828a8...
+monitor.ts:126 [OK] RPC POST 200 214ms 628B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 60ms 109B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 60ms 109B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 50ms 134B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 266ms 0B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] DexScreener GET 200 72ms 0B 
+  https://api.dexscreener.com/latest/dex/tokens/0x582daef1f36d6009f64b74519cfd612a8467be18,0x8a764cf73438de795c98707b07...
+monitor.ts:126 [OK] RPC POST 200 99ms 0B 
+  https://rpc.dogechain.dog/
+index.ts:238 [PoolScanner] Got reserves for 173 pools
+index.ts:255 [PoolScanner] Running delta scan for new pools...
+monitor.ts:126 [OK] DexScreener GET 200 59ms 0B 
+  https://api.dexscreener.com/latest/dex/tokens/0xf8e1c08e56528406913036c33d09c7c26961646b,0x493aa80becf9e010f7598a89b2...
+monitor.ts:126 [OK] RPC POST 200 27ms 71B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 30ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] DexScreener GET 200 60ms 0B 
+  https://api.dexscreener.com/latest/dex/tokens/0x1e1026ba0810e6391b0f86afa8a9305c12713b66,0x72ab1babed0502b08225fa1ef7...
+monitor.ts:126 [OK] RPC POST 200 28ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 48ms 103B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] DexScreener GET 200 56ms 0B 
+  https://api.dexscreener.com/latest/dex/tokens/0xf5fa9835263df4054313bbc00700d7c70dbf9e92,0x58278939723e6d9bed6ed59fbf...
+useTokenPrices.ts:249 [TokenPrices] DexScreener done in 425ms | Total: 105 tokens | From cache: 8 | Fetched via API: 97
+useTokenPrices.ts:262 [TokenPrices] GeckoTerminal fallback: 97 tokens (FLAGGED ON — not recommended for large token lists)
+monitor.ts:126 [OK] RPC POST 200 30ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 28ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 28ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 28ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 30ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 29ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 29ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 32ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 31ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 29ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 110ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 202ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 205ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 192ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 103B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 205ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 189ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 511ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 31ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 39ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 497ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 29ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 32ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 203ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 195ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 195ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 202ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 196ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 102B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 233ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 179ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 181ms 103B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 203ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 197ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 202ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 195ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 202ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 195ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 103B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 202ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 195ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 220ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 194ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 182ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 197ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 103B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 202ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 195ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 205ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 194ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 196ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 197ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 318ms 71B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 81ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 208ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 189ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 104B 
+  https://rpc.dogechain.dog/
+AggregatorSwap.tsx:629 [handleSwapTokens] DEBUG: {activeField: 'sell', sellToken: 'WWDOGE', buyToken: 'OMNOM', sellAmount: '', buyAmountInput: '', …}
+monitor.ts:126 [OK] RPC POST 200 199ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 295ms 85B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 401ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 502ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 401ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 295ms 86B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 394ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 399ms 69B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 401ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 446ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 50ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 100ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 211ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 188ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 197ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 280ms 118B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 415ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 400ms 102B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 384ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 460ms 86B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 403ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 338ms 69B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 398ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 239ms 154B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 405ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 395ms 228B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 596ms 228B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 796ms 226B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 995ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 990ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 1000ms 262B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 999ms 257B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 998ms 262B 
+  https://rpc.dogechain.dog/
+index.ts:764 [pathFinder] Sell tax 0.29% applied for 0xb9fcaa7590916578087842e017078d7797fa18d0: amountIn reduced
+index.ts:799 [pathFinder] calculatePathOutput final: output=61733145619680813973, nativeDecimals=18, wasNormalized=false
+index.ts:1113 [PathFinder] Found 1 candidate paths for 0xb9fcaa7590916578087842e017078d7797fa18d0 -> 0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101
+monitor.ts:126 [OK] RPC POST 200 800ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 305ms 85B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 399ms 103B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 398ms 102B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 400ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 442ms 86B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 400ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 364ms 69B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 411ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 390ms 69B 
+  https://rpc.dogechain.dog/
+AggregatorSwap.tsx:753 [ConfirmSwap] Hop 1: ToolSwap 0xb9fcaa7590916578087842e017078d7797fa18d0 -> 0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101
+AggregatorSwap.tsx:758 [ConfirmSwap] Route validation: 1 hops, pool counts: [{…}]
+monitor.ts:126 [OK] RPC POST 200 409ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 232ms 228B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 430ms 226B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 631ms 229B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 826ms 107B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 977ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 996ms 262B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 998ms 262B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 997ms 256B 
+  https://rpc.dogechain.dog/
+index.ts:764 [pathFinder] Sell tax 0.29% applied for 0xb9fcaa7590916578087842e017078d7797fa18d0: amountIn reduced
+index.ts:799 [pathFinder] calculatePathOutput final: output=61733145619680813973, nativeDecimals=18, wasNormalized=false
+index.ts:1113 [PathFinder] Found 1 candidate paths for 0xb9fcaa7590916578087842e017078d7797fa18d0 -> 0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101
+AggregatorSwap.tsx:786 [handleConfirmSwap] Route verified: user selection "0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93:0xb9fcaa7590916578087842e017078d7797fa18d0>0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101" preserved after refetch.
+monitor.ts:126 [OK] RPC POST 200 796ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 394ms 69B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 399ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 395ms 102B 
+  https://rpc.dogechain.dog/
+useSwap.ts:1385 [executeSwap] Retry 0 balance re-check: {tokenIn: '0xb9fcaa7590916578087842e017078d7797fa18d0', requiredAmount: '27919836557996027928939', requiredAmountFormatted: '27919.836558', tokenBalance: '27919836557996027928939', tokenBalanceFormatted: '27919.836558', …}
+monitor.ts:126 [OK] RPC POST 200 400ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 398ms 102B 
+  https://rpc.dogechain.dog/
+useSwap.ts:1138 [validateSwap] Balance check: {tokenIn: '0xb9fcaa7590916578087842e017078d7797fa18d0', requiredAmount: '27919836557996027928939', requiredAmountFormatted: '27919.836558', tokenBalance: '27919836557996027928939', tokenBalanceFormatted: '27919.836558', …}
+monitor.ts:126 [OK] RPC POST 200 404ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 400ms 86B 
+  https://rpc.dogechain.dog/
+useSwap.ts:897 [buildSwapRequest] Step chain:
+useSwap.ts:899   Step 0: amountIn=27850036966601037859117, minAmountOut=60140430462693048972, expectedOut=61733145619680813973
+transactionMonitor.ts:282 [TransactionMonitor] Swap started: tx_1778364449103_1 {tokenIn: '0xb9fcaa7590916578087842e017078d7797fa18d0', tokenOut: '0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101', amountIn: '27919836557996027928939', route: '0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93:0xb9fca…fa18d0>0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101'}
+monitor.ts:126 [OK] RPC POST 200 397ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 398ms 86B 
+  https://rpc.dogechain.dog/
+useSwap.ts:540 [approve] Allowance check: {token: '0xb9fcaa7590916578087842e017078d7797fa18d0', owner: '0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a', spender: '0xb6eae524325cc31bb0f3d9af7bb63b4dc991b58a', currentAllowance: '115792089237316195423570985008687907853269984665640564039457584007913129639935', requiredAmount: '27919836557996027928939', …}
+useSwap.ts:550 [approve] Skipping approval (sufficient allowance)
+monitor.ts:126 [OK] RPC POST 200 395ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 405ms 82B 
+  https://rpc.dogechain.dog/
+useSwap.ts:1630 [useSwap] Fresh quote validation: getAmountsOut reverted — continuing with original route params. The route was computed from pool reserves and may still be valid. The contract function "getAmountsOut" reverted.
 
-Docs: <https://viem.sh/docs/contract/encodeAbiParameters>\
-Version: viem@2.47.12\
-at prepareParam (chunk-4XABD5QF.js?v=7a1130d6:5130:9)\
-at encodeArray (chunk-4XABD5QF.js?v=7a1130d6:5176:27)\
-at prepareParam (chunk-4XABD5QF.js?v=7a1130d6:5103:12)\
-at prepareParams (chunk-4XABD5QF.js?v=7a1130d6:5095:25)\
-at encodeAbiParameters (chunk-4XABD5QF.js?v=7a1130d6:5083:26)\
-at encodeFunctionData (chunk-4XABD5QF.js?v=7a1130d6:6208:56)\
-at readContract (chunk-4FTHA6SF.js?v=7a1130d6:5010:20)\
-at Object.readContract (chunk-KSQSWH7C.js?v=7a1130d6:2855:29)\
-at fetchAllReserves (multicallReserves.ts:79:42)\
-at scanFactoriesForOmnomPools (index.ts:237:22)\
-(anonymous) @ index.ts:240\
-await in (anonymous)\
-fetchFn @ chunk-6J5N7HF2.js?v=7a1130d6:1149\
-run @ chunk-6J5N7HF2.js?v=7a1130d6:842\
-start @ chunk-6J5N7HF2.js?v=7a1130d6:885\
-fetch @ chunk-6J5N7HF2.js?v=7a1130d6:1196\
-executeFetch_fn @ chunk-6J5N7HF2.js?v=7a1130d6:1706\
-onSubscribe @ chunk-6J5N7HF2.js?v=7a1130d6:1397\
-subscribe @ chunk-6J5N7HF2.js?v=7a1130d6:24\
-(anonymous) @ chunk-6J5N7HF2.js?v=7a1130d6:3410\
-subscribeToStore @ react-dom_client.js?v=ed503c83:6089\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18567\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-commitHookEffectListMount @ react-dom_client.js?v=ed503c83:9411\
-commitHookPassiveMountEffects @ react-dom_client.js?v=ed503c83:9465\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11040\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11055\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11066\
-flushPassiveEffects @ react-dom_client.js?v=ed503c83:13150\
-(anonymous) @ react-dom_client.js?v=ed503c83:12776\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;PoolsScreen&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ App.tsx:88\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18509\
-renderWithHooksAgain @ react-dom_client.js?v=ed503c83:5729\
-renderWithHooks @ react-dom_client.js?v=ed503c83:5665\
-updateFunctionComponent @ react-dom_client.js?v=ed503c83:7475\
-beginWork @ react-dom_client.js?v=ed503c83:8525\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-performUnitOfWork @ react-dom_client.js?v=ed503c83:12561\
-workLoopSync @ react-dom_client.js?v=ed503c83:12424\
-renderRootSync @ react-dom_client.js?v=ed503c83:12408\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11766\
-performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=ed503c83:13505\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;App&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ main.tsx:15\
-index.ts:255 \[PoolScanner\] Running delta scan for new pools...\
-monitor.ts:126 \[OK\] DexScreener GET 200 75ms 0B\
-<https://api.dexscreener.com/latest/dex/tokens/0xe3fca919883950c5cd468156392a6477ff5d18de>\
-monitor.ts:126 \[OK\] MEXC GET 200 75ms 244B\
-/api/mexc/api/v3/ticker/24hr?symbol=OMNOMUSDT\
-useOmnomData.ts:154 \[GeckoTrades\] Persistent cache hit for pool 0x5bf60eA5cF2383F407f09CF38378176298238A6C\
-monitor.ts:64  GET <https://api.dexscreener.com/latest/dex/tokens/0xe3fcA919883950c5cD468156392a6477Ff5d18de/orders?chain=dogechain&limit=5> 404 (Not Found)\
-patchedFetch @ monitor.ts:64\
-(anonymous) @ useOmnomData.ts:445\
-fetchFn @ chunk-6J5N7HF2.js?v=7a1130d6:1149\
-run @ chunk-6J5N7HF2.js?v=7a1130d6:842\
-start @ chunk-6J5N7HF2.js?v=7a1130d6:885\
-fetch @ chunk-6J5N7HF2.js?v=7a1130d6:1196\
-executeFetch_fn @ chunk-6J5N7HF2.js?v=7a1130d6:1706\
-setOptions @ chunk-6J5N7HF2.js?v=7a1130d6:1454\
-(anonymous) @ chunk-6J5N7HF2.js?v=7a1130d6:3420\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18567\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-commitHookEffectListMount @ react-dom_client.js?v=ed503c83:9411\
-commitHookPassiveMountEffects @ react-dom_client.js?v=ed503c83:9465\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11040\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11055\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11066\
-flushPassiveEffects @ react-dom_client.js?v=ed503c83:13150\
-flushPendingEffects @ react-dom_client.js?v=ed503c83:13088\
-flushSpawnedWork @ react-dom_client.js?v=ed503c83:13062\
-commitRoot @ react-dom_client.js?v=ed503c83:12804\
-commitRootWhenReady @ react-dom_client.js?v=ed503c83:12016\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11950\
-performSyncWorkOnRoot @ react-dom_client.js?v=ed503c83:13517\
-flushSyncWorkAcrossRoots_impl @ react-dom_client.js?v=ed503c83:13414\
-processRootScheduleInMicrotask @ react-dom_client.js?v=ed503c83:13437\
-(anonymous) @ react-dom_client.js?v=ed503c83:13531\
-&lt;PoolsScreen&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ App.tsx:88\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18509\
-renderWithHooksAgain @ react-dom_client.js?v=ed503c83:5729\
-renderWithHooks @ react-dom_client.js?v=ed503c83:5665\
-updateFunctionComponent @ react-dom_client.js?v=ed503c83:7475\
-beginWork @ react-dom_client.js?v=ed503c83:8525\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-performUnitOfWork @ react-dom_client.js?v=ed503c83:12561\
-workLoopSync @ react-dom_client.js?v=ed503c83:12424\
-renderRootSync @ react-dom_client.js?v=ed503c83:12408\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11766\
-performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=ed503c83:13505\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;App&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ main.tsx:15\
-monitor.ts:126 \[FAIL\] DexScreener GET 404 57ms 0B\
-<https://api.dexscreener.com/latest/dex/tokens/0xe3fcA919883950c5cD468156392a6477Ff5d18de/orders?chain=dogechain&limit=5>\
-monitor.ts:64  GET <https://api.dexscreener.com/latest/dex/tokens/0xe3fcA919883950c5cD468156392a6477Ff5d18de/orders?chain=dogechain&limit=5> 404 (Not Found)\
-patchedFetch @ monitor.ts:64\
-(anonymous) @ useOmnomData.ts:445\
-await in (anonymous)\
-fetchFn @ chunk-6J5N7HF2.js?v=7a1130d6:1149\
-run @ chunk-6J5N7HF2.js?v=7a1130d6:842\
-start @ chunk-6J5N7HF2.js?v=7a1130d6:885\
-fetch @ chunk-6J5N7HF2.js?v=7a1130d6:1196\
-executeFetch_fn @ chunk-6J5N7HF2.js?v=7a1130d6:1706\
-setOptions @ chunk-6J5N7HF2.js?v=7a1130d6:1454\
-(anonymous) @ chunk-6J5N7HF2.js?v=7a1130d6:3420\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18567\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-commitHookEffectListMount @ react-dom_client.js?v=ed503c83:9411\
-commitHookPassiveMountEffects @ react-dom_client.js?v=ed503c83:9465\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11040\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11055\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11066\
-flushPassiveEffects @ react-dom_client.js?v=ed503c83:13150\
-flushPendingEffects @ react-dom_client.js?v=ed503c83:13088\
-flushSpawnedWork @ react-dom_client.js?v=ed503c83:13062\
-commitRoot @ react-dom_client.js?v=ed503c83:12804\
-commitRootWhenReady @ react-dom_client.js?v=ed503c83:12016\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11950\
-performSyncWorkOnRoot @ react-dom_client.js?v=ed503c83:13517\
-flushSyncWorkAcrossRoots_impl @ react-dom_client.js?v=ed503c83:13414\
-processRootScheduleInMicrotask @ react-dom_client.js?v=ed503c83:13437\
-(anonymous) @ react-dom_client.js?v=ed503c83:13531\
-&lt;PoolsScreen&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ App.tsx:88\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18509\
-renderWithHooksAgain @ react-dom_client.js?v=ed503c83:5729\
-renderWithHooks @ react-dom_client.js?v=ed503c83:5665\
-updateFunctionComponent @ react-dom_client.js?v=ed503c83:7475\
-beginWork @ react-dom_client.js?v=ed503c83:8525\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-performUnitOfWork @ react-dom_client.js?v=ed503c83:12561\
-workLoopSync @ react-dom_client.js?v=ed503c83:12424\
-renderRootSync @ react-dom_client.js?v=ed503c83:12408\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11766\
-performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=ed503c83:13505\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;App&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ main.tsx:15\
-monitor.ts:126 \[FAIL\] DexScreener GET 404 23ms 0B\
-<https://api.dexscreener.com/latest/dex/tokens/0xe3fcA919883950c5cD468156392a6477Ff5d18de/orders?chain=dogechain&limit=5>\
-monitor.ts:126 \[OK\] RPC POST 200 149ms 95B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 157ms 94B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:64  GET <https://api.dexscreener.com/latest/dex/tokens/0xe3fcA919883950c5cD468156392a6477Ff5d18de/orders?chain=dogechain&limit=5> 404 (Not Found)\
-patchedFetch @ monitor.ts:64\
-(anonymous) @ useOmnomData.ts:445\
-await in (anonymous)\
-fetchFn @ chunk-6J5N7HF2.js?v=7a1130d6:1149\
-run @ chunk-6J5N7HF2.js?v=7a1130d6:842\
-start @ chunk-6J5N7HF2.js?v=7a1130d6:885\
-fetch @ chunk-6J5N7HF2.js?v=7a1130d6:1196\
-executeFetch_fn @ chunk-6J5N7HF2.js?v=7a1130d6:1706\
-setOptions @ chunk-6J5N7HF2.js?v=7a1130d6:1454\
-(anonymous) @ chunk-6J5N7HF2.js?v=7a1130d6:3420\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18567\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-commitHookEffectListMount @ react-dom_client.js?v=ed503c83:9411\
-commitHookPassiveMountEffects @ react-dom_client.js?v=ed503c83:9465\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11040\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11033\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11055\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11201\
-recursivelyTraversePassiveMountEffects @ react-dom_client.js?v=ed503c83:11010\
-commitPassiveMountOnFiber @ react-dom_client.js?v=ed503c83:11066\
-flushPassiveEffects @ react-dom_client.js?v=ed503c83:13150\
-flushPendingEffects @ react-dom_client.js?v=ed503c83:13088\
-flushSpawnedWork @ react-dom_client.js?v=ed503c83:13062\
-commitRoot @ react-dom_client.js?v=ed503c83:12804\
-commitRootWhenReady @ react-dom_client.js?v=ed503c83:12016\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11950\
-performSyncWorkOnRoot @ react-dom_client.js?v=ed503c83:13517\
-flushSyncWorkAcrossRoots_impl @ react-dom_client.js?v=ed503c83:13414\
-processRootScheduleInMicrotask @ react-dom_client.js?v=ed503c83:13437\
-(anonymous) @ react-dom_client.js?v=ed503c83:13531\
-&lt;PoolsScreen&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ App.tsx:88\
-react_stack_bottom_frame @ react-dom_client.js?v=ed503c83:18509\
-renderWithHooksAgain @ react-dom_client.js?v=ed503c83:5729\
-renderWithHooks @ react-dom_client.js?v=ed503c83:5665\
-updateFunctionComponent @ react-dom_client.js?v=ed503c83:7475\
-beginWork @ react-dom_client.js?v=ed503c83:8525\
-runWithFiberInDEV @ react-dom_client.js?v=ed503c83:997\
-performUnitOfWork @ react-dom_client.js?v=ed503c83:12561\
-workLoopSync @ react-dom_client.js?v=ed503c83:12424\
-renderRootSync @ react-dom_client.js?v=ed503c83:12408\
-performWorkOnRoot @ react-dom_client.js?v=ed503c83:11766\
-performWorkOnRootViaSchedulerTask @ react-dom_client.js?v=ed503c83:13505\
-performWorkUntilDeadline @ react-dom_client.js?v=ed503c83:36\
-&lt;App&gt;\
-exports.jsxDEV @ react_jsx-dev-runtime.js?v=aa5b5947:247\
-(anonymous) @ main.tsx:15\
-monitor.ts:126 \[FAIL\] DexScreener GET 404 65ms 0B\
-<https://api.dexscreener.com/latest/dex/tokens/0xe3fcA919883950c5cD468156392a6477Ff5d18de/orders?chain=dogechain&limit=5>\
-monitor.ts:126 \[OK\] RPC POST 200 290ms 95B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 493ms 94B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 689ms 628B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 885ms 95B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 1087ms 94B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 1290ms 95B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 1491ms 95B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 1684ms 94B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 1882ms 71B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[SLOW\] RPC POST 200 2130ms 96B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 404ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 196ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 200ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 213ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 184ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 196ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 204ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 192ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 195ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 190ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 215ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 190ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 196ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 192ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 214ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 194ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 405ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 383ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 380ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 629ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 603ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 356ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 549ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 407ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 187ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 204ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 215ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 187ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 189ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 208ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 201ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 201ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 184ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 222ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 400ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 386ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 417ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 413ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 598ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 395ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 402ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 404ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 389ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 195ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 202ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 201ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 207ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 193ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 208ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 194ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 195ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 202ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 187ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 215ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 412ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 404ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 391ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 382ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 575ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 398ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 401ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 400ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 408ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 195ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 188ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 197ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 208ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 195ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 221ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 197ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 369ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 241ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 432ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 422ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 568ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 401ms 62B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 399ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 394ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 393ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 190ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 200ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 197ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 382ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 405ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 202ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 357ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 396ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 573ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 437ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 616ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 399ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 561ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 189ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 200ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 205ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 193ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 196ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 200ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 389ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 397ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 390ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 400ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 396ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 399ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 364ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 399ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 585ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 398ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 107B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 103B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 199ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 203ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 349ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 47ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 209ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 400ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 71B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 201ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 407ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 205ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 384ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 194ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 407ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 411ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 407ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 410ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 177ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 206ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 193ms 106B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 201ms 104B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 194ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 200ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 198ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 200ms 107B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 197ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 386ms 63B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 405ms 105B\
-<https://rpc.dogechain.dog/>\
-monitor.ts:126 \[OK\] RPC POST 200 203ms 63B\
-<https://rpc.dogechain.dog/>
+Contract Call:
+  address:   0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93
+  function:  getAmountsOut(uint256 amountIn, address[] path)
+  args:                   (27919836557996027928939, ["0xb9fcaa7590916578087842e017078d7797fa18d0","0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101"])
+
+Docs: https://viem.sh/docs/contract/readContract
+Version: viem@2.47.12
+(anonymous) @ useSwap.ts:1630
+await in (anonymous)
+$RefreshSig$ @ AggregatorSwap.tsx:847
+useSwap.ts:1635 [useSwap] Fresh quote validation failed (continuing with original params): The contract function "getAmountsOut" reverted.
+
+Contract Call:
+  address:   0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93
+  function:  getAmountsOut(uint256 amountIn, address[] path)
+  args:                   (27919836557996027928939, ["0xb9fcaa7590916578087842e017078d7797fa18d0","0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101"])
+
+Docs: https://viem.sh/docs/contract/readContract
+Version: viem@2.47.12
+(anonymous) @ useSwap.ts:1635
+await in (anonymous)
+$RefreshSig$ @ AggregatorSwap.tsx:847
+monitor.ts:126 [OK] RPC POST 200 398ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 379ms 86B 
+  https://rpc.dogechain.dog/
+useSwap.ts:1007 [estimateGasWithBuffer] Pre-check allowance: {tokenIn: '0xb9fcaa7590916578087842e017078d7797fa18d0', owner: '0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a', spender: '0xb6eae524325cc31bb0f3d9af7bb63b4dc991b58a', allowance: '115792089237316195423570985008687907853269984665640564039457584007913129639935', amountIn: '27919836557996027928939', …}
+monitor.ts:126 [OK] RPC POST 200 400ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 406ms 100B 
+  https://rpc.dogechain.dog/
+walletProviderManager.ts:377 [CRITICAL] Swap Failed: Execution reverted for an unknown reason.
+
+Estimate Gas Arguments:
+  from:  0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a
+  to:    0xb6eae524325cc31bb0f3d9af7bb63b4dc991b58a
+  data:  0x2163ab660000000000000000000000000000000000000000000000000000000000000020000000000000000000000000b9fcaa7590916578087842e017078d7797fa18d0000000000000000000000000b7ddc6414bf4f5515b52d8bdd69973ae205ff1010000000000000000000000000000000000000000000005e989913fdd0e1de16b000000000000000000000000000000000000000000000003429dbade3fe6828c00000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000069ffb14d00000000000000000000000022f4194f6706e70abaa14ab352d0baa6c7ced24a000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000009bbf70e64fbe8fc7afe8a5ae90f2db1165013f9300000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000005e989913fdd0e1de16b000000000000000000000000000000000000000000000003429dbade3fe6828c0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000b9fcaa7590916578087842e017078d7797fa18d0000000000000000000000000b7ddc6414bf4f5515b52d8bdd69973ae205ff101
+ 
+Contract Call:
+  address:   0xb6eae524325cc31bb0f3d9af7bb63b4dc991b58a
+  function:  executeSwap((address tokenIn, address tokenOut, uint256 amountIn, uint256 minTotalAmountOut, (address router, address[] path, uint256 amountIn, uint256 minAmountOut)[], uint256 deadline, address recipient))
+  args:                 ({"tokenIn":"0xb9fcaa7590916578087842e017078d7797fa18d0","tokenOut":"0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101","amountIn":"27919836557996027928939","minTotalAmountOut":"60140430462693048972","steps":[{"router":"0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93","path":["0xb9fcaa7590916578087842e017078d7797fa18d0","0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101"],"amountIn":"27919836557996027928939","minAmountOut":"60140430462693048972"}],"deadline":"1778364749","recipient":"0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a"})
+  sender:    0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a
+
+Docs: https://viem.sh/docs/contract/estimateContractGas
+Details: execution reverted
+Version: viem@2.47.12 {attemptId: 'tx_1778364449103_1', errorCode: 'EXECUTION_FAILED', revertReason: undefined, tokenIn: '0xb9fcaa7590916578087842e017078d7797fa18d0', tokenOut: '0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101', …}
+(anonymous) @ walletProviderManager.ts:377
+emitAlert @ transactionMonitor.ts:607
+trackSwapFailure @ transactionMonitor.ts:351
+(anonymous) @ transactionMonitor.ts:812
+(anonymous) @ useSwap.ts:1691
+await in (anonymous)
+$RefreshSig$ @ AggregatorSwap.tsx:847
+walletProviderManager.ts:377 [TransactionMonitor] Swap failed: tx_1778364449103_1 {error: 'EXECUTION_FAILED', message: 'Execution reverted for an unknown reason.\n\nEstimat…Details: execution reverted\nVersion: viem@2.47.12', revertReason: undefined, diagnostic: {…}}
+(anonymous) @ walletProviderManager.ts:377
+trackSwapFailure @ transactionMonitor.ts:367
+(anonymous) @ transactionMonitor.ts:812
+(anonymous) @ useSwap.ts:1691
+await in (anonymous)
+$RefreshSig$ @ AggregatorSwap.tsx:847
+useSwap.ts:1784 [useSwap] Aggregator swap reverted — falling back to direct router swap
+(anonymous) @ useSwap.ts:1784
+await in (anonymous)
+$RefreshSig$ @ AggregatorSwap.tsx:847
+monitor.ts:126 [OK] RPC POST 200 397ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 378ms 86B 
+  https://rpc.dogechain.dog/
+useDirectRouterSwap.ts:112 [directSwap:approve] Allowance check: {token: '0xb9fcaa7590916578087842e017078d7797fa18d0', owner: '0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a', spender: '0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93', currentAllowance: '115792089237316195423570985008687907853269984665640564039457584007913129639935', requiredAmount: '27919836557996027928939', …}
+useDirectRouterSwap.ts:122 [directSwap:approve] Skipping approval (sufficient allowance)
+monitor.ts:126 [OK] RPC POST 200 403ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 402ms 100B 
+  https://rpc.dogechain.dog/
+useSwap.ts:1815 [useSwap] Direct router swap also failed: Execution reverted for an unknown reason.
+
+Estimate Gas Arguments:
+  from:  0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a
+  to:    0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93
+  data:  0x5c11d7950000000000000000000000000000000000000000000005e989913fdd0e1de16b000000000000000000000000000000000000000000000003429dbade3fe6828c00000000000000000000000000000000000000000000000000000000000000a000000000000000000000000022f4194f6706e70abaa14ab352d0baa6c7ced24a0000000000000000000000000000000000000000000000000000000069ffb14e0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000b9fcaa7590916578087842e017078d7797fa18d0000000000000000000000000b7ddc6414bf4f5515b52d8bdd69973ae205ff101
+ 
+Contract Call:
+  address:   0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93
+  function:  swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline)
+  args:                                                           (27919836557996027928939, 60140430462693048972, ["0xb9fcaa7590916578087842e017078d7797fa18d0","0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101"], 0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a, 1778364750)
+  sender:    0x22F4194F6706E70aBaA14AB352D0baA6C7ceD24a
+
+Docs: https://viem.sh/docs/contract/estimateContractGas
+Details: execution reverted
+Version: viem@2.47.12
+(anonymous) @ useSwap.ts:1815
+await in (anonymous)
+$RefreshSig$ @ AggregatorSwap.tsx:847
+useSwap.ts:196 [useSwap] Swap error: {selector: null, decodedName: null, rawMessage: 'Execution reverted for an unknown reason.\n\nEstimat…Details: execution reverted\nVersion: viem@2.47.12', routeContext: {…}}
+formatSwapErrorMessage @ useSwap.ts:196
+(anonymous) @ useSwap.ts:1830
+await in (anonymous)
+$RefreshSig$ @ AggregatorSwap.tsx:847
+walletProviderManager.ts:377 [useSwap] Non-retriable error: {decodedErrorMsg: 'Execution reverted for an unknown reason.\n\nEstimat…Details: execution reverted\nVersion: viem@2.47.12', originalError: 'Execution reverted for an unknown reason.\n\nEstimat…Details: execution reverted\nVersion: viem@2.47.12', routeId: '0x9bbf70e64fbe8fc7afe8a5ae90f2db1165013f93:0xb9fca…fa18d0>0xb7ddc6414bf4f5515b52d8bdd69973ae205ff101', routeContext: {…}}
+(anonymous) @ walletProviderManager.ts:377
+(anonymous) @ useSwap.ts:1831
+await in (anonymous)
+$RefreshSig$ @ AggregatorSwap.tsx:847
+monitor.ts:126 [OK] RPC POST 200 395ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 203ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 197ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 198ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 197ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 208ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 237ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 148ms 104B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 199ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 200ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 201ms 105B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 196ms 106B 
+  https://rpc.dogechain.dog/
+monitor.ts:126 [OK] RPC POST 200 211ms 106B 
+  https://rpc.dogechain.dog/

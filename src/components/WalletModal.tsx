@@ -3,6 +3,11 @@ import { useConnect, useDisconnect, useAccount, useChainId, useSwitchChain } fro
 import { dogechain } from 'wagmi/chains';
 import { Ghost, X, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  detectProviderConflict,
+  setPreferredWallet,
+  type ProviderConflictInfo,
+} from '../lib/walletProviderManager';
 
 const DOGECHAIN_ID = dogechain.id;
 
@@ -14,16 +19,21 @@ interface WalletModalProps {
 
 /** Detect the actual injected provider from window.ethereum */
 function detectInjectedProvider(): { name: string; icon: string } | null {
-  const ethereum = (window as unknown as { ethereum?: Record<string, unknown> }).ethereum;
-  if (!ethereum) return null;
+  try {
+    const ethereum = (window as unknown as { ethereum?: Record<string, unknown> }).ethereum;
+    if (!ethereum) return null;
 
-  // Check for specific providers — order matters (most specific first)
-  if (ethereum.isRabby) return { name: 'Rabby', icon: '/wallets/rabby.svg' };
-  if (ethereum.isTrust || ethereum.isTrustWallet) return { name: 'Trust Wallet', icon: '/wallets/trust.svg' };
-  if (ethereum.isCoinbaseWallet) return { name: 'Coinbase Wallet', icon: '/wallets/coinbase.svg' };
-  if (ethereum.isMetaMask) return { name: 'MetaMask', icon: '/wallets/metamask.svg' };
+    // Check for specific providers — order matters (most specific first)
+    if (ethereum.isRabby) return { name: 'Rabby', icon: '/wallets/rabby.svg' };
+    if (ethereum.isTrust || ethereum.isTrustWallet) return { name: 'Trust Wallet', icon: '/wallets/trust.svg' };
+    if (ethereum.isCoinbaseWallet) return { name: 'Coinbase Wallet', icon: '/wallets/coinbase.svg' };
+    if (ethereum.isMetaMask) return { name: 'MetaMask', icon: '/wallets/metamask.svg' };
 
-  return null; // Unknown provider — will use generic "Browser Wallet"
+    return null; // Unknown provider — will use generic "Browser Wallet"
+  } catch {
+    // SES lockdown or property access error
+    return null;
+  }
 }
 
 /** Map connector IDs to friendly display info */
@@ -81,6 +91,11 @@ function formatConnectionError(err: unknown): string {
       return 'Dogechain is not configured in your wallet. Please add it manually.';
     }
 
+    // Provider getter conflict (TypeError from inpage.js)
+    if (lower.includes('cannot set property ethereum') || lower.includes('only a getter')) {
+      return 'Wallet provider conflict detected. Try disabling other wallet extensions or refresh the page.';
+    }
+
     // Truncate very long errors
     if (msg.length > 120) {
       return msg.substring(0, 120) + '…';
@@ -101,6 +116,9 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
   const [pendingConnector, setPendingConnector] = useState<string | null>(null);
   const [pendingVirtual, setPendingVirtual] = useState(false);
   const isWrongNetwork = isConnected && chainId !== DOGECHAIN_ID;
+
+  // Detect provider conflicts using the wallet provider manager
+  const conflictInfo: ProviderConflictInfo = useMemo(() => detectProviderConflict(), []);
 
   // Deduplicate connectors: when an injected provider is present, the generic
   // injected() connector already covers any injected wallet (MetaMask, Rabby,
@@ -132,6 +150,17 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
     try {
       await connectAsync({ connector, chainId: DOGECHAIN_ID });
       setPendingConnector(null);
+
+      // Store the user's wallet preference for future provider resolution
+      const meta = getWalletMeta(connector.id, connector.name);
+      if (meta) {
+        const walletId = connector.id.toLowerCase().includes('metamask') ? 'metamask'
+          : connector.id.toLowerCase().includes('coinbase') ? 'coinbase'
+          : connector.id.toLowerCase().includes('walletconnect') ? 'walletconnect'
+          : 'injected';
+        setPreferredWallet(walletId);
+      }
+
       onToast?.({ type: 'success', title: 'Wallet Connected', message: 'Ready to swap on Dogechain' });
       setTimeout(() => onClose(), 300);
     } catch (err: unknown) {
@@ -171,6 +200,24 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
             </div>
 
             <div className="p-6 flex flex-col gap-4">
+              {/* Provider conflict warning */}
+              {conflictInfo.hasConflict && !isWrongNetwork && !isConnected && (
+                <div className="flex items-start gap-3 bg-yellow-900/20 border border-yellow-500/30 p-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-headline font-bold text-yellow-300 uppercase">
+                      Multiple Wallets Detected
+                    </p>
+                    <p className="text-[11px] text-on-surface-variant mt-1">
+                      {conflictInfo.ethereumIsGetter
+                        ? 'Another extension has locked the provider. Connection should still work — if it fails, try disabling other wallet extensions.'
+                        : `${conflictInfo.providers.length} wallet extensions detected. Select the one you want to use.`
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {isWrongNetwork ? (
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-3 bg-red-900/20 border border-red-500/30 p-4">
@@ -271,6 +318,7 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
                               try {
                                 await connectAsync({ connector: item.connector, chainId: DOGECHAIN_ID });
                                 setPendingVirtual(false);
+                                setPreferredWallet('trust');
                                 onToast?.({ type: 'success', title: 'Wallet Connected', message: 'Ready to swap on Dogechain' });
                                 setTimeout(() => onClose(), 300);
                               } catch (err: unknown) {

@@ -42,6 +42,7 @@ import { useReverseRoute } from '../../hooks/useAggregator/useReverseRoute';
 import { useSwap } from '../../hooks/useAggregator/useSwap';
 import { useAggregatorContract } from '../../hooks/useAggregator/useAggregatorContract';
 import { useAutoSlippage } from '../../hooks/useAutoSlippage';
+import { useTokenCompatibilityCheck, type TokenCompatibilityResult } from '../../hooks/useTokenCompatibilityCheck';
 import type { WalletScanResult } from '../../hooks/usePrioritizedTokenLoader';
 import { TokenSelector } from './TokenSelector';
 import { RouteVisualization } from './RouteVisualization';
@@ -160,6 +161,10 @@ export function AggregatorSwap({ walletScan }: { walletScan: WalletScanResult })
   // Token tax detection
   const { sellTax, buyTax } = useSwapTokenTax(sellToken.address, buyToken.address);
 
+  // Token compatibility check — detects transfer restrictions
+  const { checkCompatibility, result: compatibilityResult, isChecking: isCheckingCompatibility } = useTokenCompatibilityCheck();
+  const [tokenCompatibility, setTokenCompatibility] = useState<TokenCompatibilityResult | null>(null);
+
   // Confirmation modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
@@ -247,10 +252,44 @@ export function AggregatorSwap({ walletScan }: { walletScan: WalletScanResult })
   const routeComparison = activeField === 'sell' ? forwardRouteComparison : null;
   const priceImpactWarnings = activeField === 'sell' ? forwardPriceImpactWarnings : [];
 
-  const { executeSwap, isPending, isConfirming, isConfirmed, txHash, error: swapError, reset: resetSwap } = useSwap();
+  const { executeSwap, isPending, isConfirming, isConfirmed, txHash, error: swapError, reset: resetSwap, swapMode } = useSwap();
   const { addToast } = useToast();
   const publicClient = usePublicClient();
   const { address } = useAccount();
+
+  // ─── Token Compatibility Check ────────────────────────────────────────────
+  // When sell token changes, run a pre-flight compatibility check to detect
+  // transfer restrictions. This shows warnings before the user tries to swap.
+  useEffect(() => {
+    if (!address || !publicClient || !isConnected) {
+      setTokenCompatibility(null);
+      return;
+    }
+
+    // Skip check for WWDOGE/DOGE (native token — no transfer restrictions)
+    if (isNativeToken(sellToken)) {
+      setTokenCompatibility(null);
+      return;
+    }
+
+    // Determine the router to test against (from the current route)
+    const routerAddress = route?.steps?.[0]?.dexRouter as `0x${string}` | undefined;
+
+    let cancelled = false;
+    checkCompatibility(
+      sellToken.address as `0x${string}`,
+      undefined, // default aggregator address
+      routerAddress,
+    ).then((result) => {
+      if (!cancelled) {
+        setTokenCompatibility(result);
+      }
+    }).catch(() => {
+      // Silently ignore — compatibility check is best-effort
+    });
+
+    return () => { cancelled = true; };
+  }, [sellToken.address, address, publicClient, isConnected, checkCompatibility, route?.steps]);
 
   // Stabilize publicClient via ref to prevent infinite re-render loops
   const publicClientRef = useRef(publicClient);
@@ -514,10 +553,21 @@ export function AggregatorSwap({ walletScan }: { walletScan: WalletScanResult })
   })();
 
   // Button state
-  let buttonText = 'CHOMP THE AGGREGATED SWAP';
+  const isDirectSwapMode = tokenCompatibility
+    && !tokenCompatibility.isCompatible
+    && tokenCompatibility.isDirectSwapPossible;
+  let buttonText = isDirectSwapMode ? 'DIRECT ROUTER SWAP' : 'CHOMP THE AGGREGATED SWAP';
   let isDisabled = false;
 
-  if (!contractDeployed) {
+  // Check for fully incompatible token (blocks all DEX interactions)
+  const isTokenFullyIncompatible = tokenCompatibility
+    && !tokenCompatibility.isCompatible
+    && !tokenCompatibility.isDirectSwapPossible;
+
+  if (isTokenFullyIncompatible) {
+    buttonText = 'TOKEN NOT SWAPPABLE';
+    isDisabled = true;
+  } else if (!contractDeployed) {
     buttonText = 'CONTRACT NOT DEPLOYED';
     isDisabled = true;
   } else if (isWrongNetwork) {
@@ -878,6 +928,44 @@ export function AggregatorSwap({ walletScan }: { walletScan: WalletScanResult })
           <p className="text-on-surface-variant text-xs mt-1 font-body">
             Contract not yet deployed. Route calculations are shown for preview purposes — the swap button is disabled until deployment.
           </p>
+        </div>
+      )}
+
+      {/* Token Compatibility Warnings */}
+      {tokenCompatibility && !tokenCompatibility.isCompatible && tokenCompatibility.isDirectSwapPossible && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-yellow-500 font-headline text-xs uppercase tracking-wider">
+              ⚠️ Transfer Restriction Detected
+            </p>
+            <p className="text-on-surface-variant text-xs mt-1 font-body">
+              This token has transfer restrictions. Direct swap mode will be used (no aggregator fee).
+            </p>
+          </div>
+        </div>
+      )}
+      {tokenCompatibility && !tokenCompatibility.isCompatible && !tokenCompatibility.isDirectSwapPossible && (
+        <div className="bg-red-500/10 border border-red-500/30 p-3 flex items-start gap-2">
+          <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-red-500 font-headline text-xs uppercase tracking-wider">
+              🚫 Token Not Swappable
+            </p>
+            <p className="text-on-surface-variant text-xs mt-1 font-body">
+              This token cannot be swapped. It has transfer restrictions that block all DEX interactions.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Swap Mode Indicator */}
+      {swapMode === 'direct' && !tokenCompatibility?.isCompatible && tokenCompatibility?.isDirectSwapPossible && (
+        <div className="bg-blue-500/10 border border-blue-500/20 p-2 flex items-center gap-2">
+          <Zap className="w-3 h-3 text-blue-400 shrink-0" />
+          <span className="text-blue-400 font-headline text-[10px] uppercase tracking-widest">
+            Direct Router Swap — No Aggregator Fee
+          </span>
         </div>
       )}
 

@@ -18,7 +18,7 @@
 
 import { usePublicClient, useAccount } from 'wagmi';
 import { useRef, useState, useCallback } from 'react';
-import type { Address } from 'viem';
+import { parseAbi, type Address } from 'viem';
 
 export interface GasEstimate {
   gasLimit: bigint;
@@ -231,5 +231,48 @@ export function useGasEstimate() {
     });
   }, [publicClient, address, consecutiveFailures, disabledUntil]);
 
-  return { estimateLiquidityGas };
+  /**
+   * Estimate gas for a direct DEX router swap.
+   *
+   * Uses the router contract address instead of the aggregator.
+   * Estimates swapExactTokensForTokensSupportingFeeOnTransferTokens gas.
+   */
+  const estimateDirectSwapGas = useCallback(async (
+    routerAddress: Address,
+    amountIn: bigint,
+    amountOutMin: bigint,
+    path: Address[],
+    recipient: Address,
+    deadline: bigint,
+  ): Promise<GasEstimate> => {
+    if (!publicClient || !address) {
+      return { gasLimit: 0n, gasCost: 0n, isLoading: false };
+    }
+
+    const ROUTER_ABI = parseAbi([
+      'function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline) external',
+    ]);
+
+    try {
+      const estimatedGas = await publicClient.estimateContractGas({
+        address: routerAddress,
+        abi: ROUTER_ABI,
+        functionName: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
+        args: [amountIn, amountOutMin, path, recipient, deadline],
+        account: address,
+      });
+
+      const bufferedGas = (estimatedGas * GAS_BUFFER_NUMERATOR) / GAS_BUFFER_DENOMINATOR;
+      const gasLimit = bufferedGas > MAX_GAS_CAP ? MAX_GAS_CAP : bufferedGas;
+      const gasPrice = await publicClient.getGasPrice();
+      const gasCost = gasLimit * gasPrice;
+
+      return { gasLimit, gasCost, isLoading: false };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return { gasLimit: 0n, gasCost: 0n, isLoading: false, error: errorMessage };
+    }
+  }, [publicClient, address]);
+
+  return { estimateLiquidityGas, estimateDirectSwapGas };
 }

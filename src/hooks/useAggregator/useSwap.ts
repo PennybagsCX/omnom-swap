@@ -32,6 +32,7 @@ import {
 import type { RouteResult, SwapRequest } from '../../services/pathFinder/types';
 import { isRouterRegistered, getDexList } from '../../services/pathFinder/poolFetcher';
 import { trackSwapStart, trackSwapSuccess, trackSwapFailure, trackSwapReverted } from '../../services/monitoring/transactionMonitor';
+import { useDirectRouterSwap, type DirectRouterSwapParams } from '../useDirectRouterSwap';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -124,13 +125,54 @@ function parseSwapError(err: unknown): { selector: string | null; decodedName: s
   if (err instanceof Error) {
     rawMessage = err.message;
 
-    // Extract selector from error message or data
-    // Error messages from external routers typically look like:
-    // "execution reverted: 0xe450d38c" or contain the selector in the message
-    const selectorMatch = err.message.match(/0x[a-fA-F0-9]{8}/);
-    if (selectorMatch) {
-      selector = selectorMatch[0].toLowerCase();
-      decodedName = decodeErrorSelector(selector);
+    // Strategy 1: Try to extract selector from the error's `data` property (viem errors)
+    // Viem ContractFunctionExecutionError stores the revert data in err.data
+    const errAny = err as unknown as Record<string, unknown>;
+    if (errAny.data && typeof errAny.data === 'string' && errAny.data.startsWith('0x') && errAny.data.length >= 10) {
+      const dataSelector = errAny.data.slice(0, 10).toLowerCase();
+      const decoded = decodeErrorSelector(dataSelector);
+      if (decoded) {
+        selector = dataSelector;
+        decodedName = decoded;
+      }
+    }
+
+    // Strategy 2: Try to extract selector from the error's `cause.data` (nested viem errors)
+    if (!decodedName && errAny.cause && typeof errAny.cause === 'object' && errAny.cause !== null) {
+      const cause = errAny.cause as Record<string, unknown>;
+      if (cause.data && typeof cause.data === 'string' && (cause.data as string).startsWith('0x') && (cause.data as string).length >= 10) {
+        const causeSelector = (cause.data as string).slice(0, 10).toLowerCase();
+        const decoded = decodeErrorSelector(causeSelector);
+        if (decoded) {
+          selector = causeSelector;
+          decodedName = decoded;
+        }
+      }
+    }
+
+    // Strategy 3: Look for selector after "execution reverted:" in the message
+    // This is the format: "execution reverted: 0xABCDEF01"
+    // Use negative lookahead to avoid matching partial addresses (must be exactly 8 hex chars)
+    if (!decodedName) {
+      const revertSelectorMatch = err.message.match(/(?:execution reverted|reverted with)[:\s]+(0x[a-fA-F0-9]{8})(?![a-fA-F0-9])/i);
+      if (revertSelectorMatch) {
+        selector = revertSelectorMatch[1].toLowerCase();
+        decodedName = decodeErrorSelector(selector);
+      }
+    }
+
+    // Strategy 4: Look for known error selectors anywhere in the message, but only
+    // if they're standalone (not part of a longer hex string like an address)
+    if (!decodedName) {
+      for (const knownSelector of Object.keys(UNISWAP_V2_ROUTER_ERRORS)) {
+        // Match the selector only when it's NOT preceded or followed by more hex chars
+        const pattern = new RegExp(`(?<![a-fA-F0-9])${knownSelector}(?![a-fA-F0-9])`, 'i');
+        if (pattern.test(err.message)) {
+          selector = knownSelector.toLowerCase();
+          decodedName = decodeErrorSelector(selector);
+          break;
+        }
+      }
     }
 
     // Also check for revert reason strings
@@ -215,17 +257,26 @@ export interface FreshnessResult {
 /**
  * Check if an error is a transient network error that is safe to retry.
  * On-chain reverts and user rejections are NOT retried.
+ *
+ * IMPORTANT: "execution reverted" errors are on-chain failures that will
+ * always fail with the same parameters — retrying is pointless and wastes
+ * ~10 seconds per retry. Only genuine network/transport errors are retried.
  */
 function isTransientNetworkError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const lower = err.message.toLowerCase();
+
+  // On-chain execution reverts are NEVER transient — fail fast
+  if (lower.includes('execution reverted') || lower.includes('execution failed')) {
+    return false;
+  }
+
   return (
     lower.includes('timeout') ||
     lower.includes('timed out') ||
     lower.includes('connection reset') ||
     lower.includes('network error') ||
     lower.includes('fetch failed') ||
-    lower.includes('rpc') ||
     lower.includes('econnrefused') ||
     lower.includes('econnreset') ||
     lower.includes('socket hang up') ||
@@ -435,6 +486,11 @@ async function checkPoolFreshness(
   };
 }
 
+// ─── Swap Mode ────────────────────────────────────────────────────────────────
+
+/** Swap execution mode — aggregator (default) or direct DEX router fallback. */
+export type SwapMode = 'aggregator' | 'direct';
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useSwap() {
@@ -447,6 +503,12 @@ export function useSwap() {
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /** Current swap mode — set by compatibility check before execution. */
+  const [swapMode, setSwapMode] = useState<SwapMode>('aggregator');
+
+  /** Direct router swap hook — used when aggregator is incompatible. */
+  const directSwap = useDirectRouterSwap();
 
   /**
    * Approve the aggregator contract to spend tokens on behalf of the user.
@@ -798,7 +860,10 @@ export function useSwap() {
       // so a mismatch > 10x means the swap will fail with INSUFFICIENT_OUTPUT_AMOUNT.
       for (let i = 1; i < route.steps.length; i++) {
         const prevOutput = stepExpectedNormalized[i - 1];
-        const nextInput = stepExpectedNormalized[i];
+        // Use the actual amountIn for this step (already normalized to 18-decimal
+        // equivalent by the pathFinder). Do NOT use stepExpectedNormalized[i] —
+        // that is this step's OUTPUT (a different token), not its INPUT.
+        const nextInput = route.steps[i].amountIn;
         // The next hop's input should be close to the previous hop's output
         // Allow 10x tolerance for tax/fee adjustments
         if (prevOutput > 0n && nextInput > 0n) {
@@ -1080,12 +1145,10 @@ export function useSwap() {
           passes: tokenBalance >= requiredAmount,
         });
 
-        // Add 0.1% safety buffer for RPC staleness / rounding
-        const bufferedRequired = requiredAmount + (requiredAmount * 10n) / 10000n;
-        if (tokenBalance < bufferedRequired) {
-          const need = (Number(bufferedRequired) / 1e18).toFixed(4);
+        if (tokenBalance < requiredAmount) {
+          const need = (Number(requiredAmount) / 1e18).toFixed(4);
           const have = (Number(tokenBalance) / 1e18).toFixed(4);
-          console.warn(`[validateSwap] INSUFFICIENT: need ${need} DC, have ${have} DC (with 0.1% buffer)`);
+          console.warn(`[validateSwap] INSUFFICIENT: need ${need} DC, have ${have} DC`);
           return `Insufficient balance. Need ~${need} tokens, have ${have}`;
         }
       }
@@ -1147,6 +1210,120 @@ export function useSwap() {
       setTxHash(null);
       setError(null);
 
+      // ─── Pre-Flight Compatibility Check ────────────────────────────────────
+      // Test if the token can be transferred to the aggregator.
+      // If not, check if direct router swap is possible.
+      // This catches tokens with transfer restrictions (blacklists, etc.)
+      const tokenInForCheck = route.steps[0].path[0] as Address;
+      const routerForCheck = route.steps[0].dexRouter as Address;
+      const isSingleStepRoute = route.steps.length === 1;
+
+      let useDirectSwap = false;
+
+      if (publicClient && address && isSingleStepRoute) {
+        try {
+          // Simulate transfer(tokenIn, aggregator, 1) from user's address
+          const TRANSFER_ABI = [
+            {
+              name: 'transfer',
+              type: 'function',
+              stateMutability: 'nonpayable',
+              inputs: [
+                { name: 'to', type: 'address' },
+                { name: 'amount', type: 'uint256' },
+              ],
+              outputs: [{ name: '', type: 'bool' }],
+            },
+          ] as const;
+
+          let aggregatorTransferWorks = false;
+          try {
+            const result = await publicClient.readContract({
+              address: tokenInForCheck,
+              abi: TRANSFER_ABI,
+              functionName: 'transfer',
+              args: [OMNOMSWAP_AGGREGATOR_ADDRESS, 1n],
+              account: address,
+            });
+            aggregatorTransferWorks = result === true;
+          } catch {
+            // Transfer to aggregator failed — might be a restriction
+          }
+
+          if (!aggregatorTransferWorks) {
+            // Check if direct router transfer works
+            let routerTransferWorks = false;
+            try {
+              const result = await publicClient.readContract({
+                address: tokenInForCheck,
+                abi: TRANSFER_ABI,
+                functionName: 'transfer',
+                args: [routerForCheck, 1n],
+                account: address,
+              });
+              routerTransferWorks = result === true;
+            } catch {
+              // Transfer to router also failed
+            }
+
+            if (routerTransferWorks) {
+              // Token blocks aggregator but allows router — use direct swap
+              console.log(`[useSwap] Token ${tokenInForCheck} blocks aggregator transfers. Using direct router swap.`);
+              useDirectSwap = true;
+              setSwapMode('direct');
+            } else {
+              // Token blocks all contract transfers — cannot swap
+              const errMsg = 'This token has transfer restrictions that prevent DEX swaps. It cannot be traded through any aggregator or DEX router.';
+              setError(errMsg);
+              setIsPending(false);
+              return;
+            }
+          } else {
+            setSwapMode('aggregator');
+          }
+        } catch (err) {
+          // Compatibility check failed — proceed with aggregator (best effort)
+          console.warn('[useSwap] Compatibility check failed, proceeding with aggregator:', err);
+          setSwapMode('aggregator');
+        }
+      } else {
+        // Multi-hop routes must use aggregator
+        setSwapMode('aggregator');
+      }
+
+      // ─── Direct Router Swap Path ───────────────────────────────────────────
+      if (useDirectSwap && isSingleStepRoute) {
+        const step = route.steps[0];
+        const currentTimeSeconds = Math.floor(Date.now() / 1000);
+        const deadline = BigInt(currentTimeSeconds + (deadlineMinutes || 5) * 60);
+        const slippageMultiplier = 10000n - BigInt(slippageBps);
+        const minAmountOut = (route.totalExpectedOut * slippageMultiplier) / 10000n;
+
+        const directParams: DirectRouterSwapParams = {
+          tokenIn: step.path[0] as Address,
+          tokenOut: step.path[step.path.length - 1] as Address,
+          amountIn: route.totalAmountIn,
+          minAmountOut,
+          router: step.dexRouter as Address,
+          recipient: address!,
+          deadline,
+          path: step.path as Address[],
+        };
+
+        setIsPending(false);
+
+        const directResult = await directSwap.executeDirectSwap(directParams);
+
+        if (directResult.success) {
+          setIsConfirmed(true);
+          setTxHash(directResult.txHash);
+        } else {
+          setError(directResult.error);
+        }
+        setIsConfirming(false);
+        return;
+      }
+
       // Track swap start (Phase 8 monitoring) - attemptId valid after buildSwapRequest
       let attemptId = '';
       const tokenInAddr = route.steps[0].path[0] as Address;
@@ -1190,9 +1367,8 @@ export function useSwap() {
               })) as bigint;
               const nativeBal = await publicClient.getBalance({ address });
               const totalAvail = wwdogeBal + nativeBal;
-              const bufferedReq = requiredAmount + (requiredAmount * 10n) / 10000n;
-              if (totalAvail < bufferedReq) {
-                const need = (Number(bufferedReq) / 1e18).toFixed(4);
+              if (totalAvail < requiredAmount) {
+                const need = (Number(requiredAmount) / 1e18).toFixed(4);
                 const have = (Number(totalAvail) / 1e18).toFixed(4);
                 console.warn(`[executeSwap] Retry ${attempt}: INSUFFICIENT WWDOGE+DOGE: need ${need}, have ${have}`);
                 setError(`Insufficient balance. Need ~${need} WWDOGE/DOGE, have ${have}`);
@@ -1206,7 +1382,6 @@ export function useSwap() {
                 functionName: 'balanceOf',
                 args: [address],
               })) as bigint;
-              const bufferedReq = requiredAmount + (requiredAmount * 10n) / 10000n;
               console.log(`[executeSwap] Retry ${attempt} balance re-check:`, {
                 tokenIn: tokenInAddr,
                 requiredAmount: requiredAmount.toString(),
@@ -1214,10 +1389,10 @@ export function useSwap() {
                 tokenBalance: tokenBal.toString(),
                 tokenBalanceFormatted: (Number(tokenBal) / 1e18).toFixed(6),
                 difference: (tokenBal - requiredAmount).toString(),
-                passes: tokenBal >= bufferedReq,
+                passes: tokenBal >= requiredAmount,
               });
-              if (tokenBal < bufferedReq) {
-                const need = (Number(bufferedReq) / 1e18).toFixed(4);
+              if (tokenBal < requiredAmount) {
+                const need = (Number(requiredAmount) / 1e18).toFixed(4);
                 const have = (Number(tokenBal) / 1e18).toFixed(4);
                 console.warn(`[executeSwap] Retry ${attempt}: INSUFFICIENT: need ${need}, have ${have}`);
                 setError(`Insufficient balance. Need ~${need} tokens, have ${have}`);
@@ -1353,6 +1528,113 @@ export function useSwap() {
           // Step 1: Approve aggregator to spend input tokens
           await approve(tokenIn, route.totalAmountIn);
 
+          // ─── Step 1.5: Fresh On-Chain Quote Validation ──────────────────
+          // The pathFinder uses pool reserves fetched at page load time.
+          // By the time the user confirms the swap, reserves may have changed
+          // (other swaps, liquidity changes). This validation calls the DEX
+          // router's getAmountsOut() to get a FRESH quote and adjusts
+          // minTotalAmountOut if the pool's actual output differs significantly
+          // from the pathFinder's prediction.
+          //
+          // This prevents swaps from failing with "execution reverted" when
+          // the pathFinder's expected output is higher than what the pool can
+          // actually deliver.
+          try {
+            const UNISWAP_V2_ROUTER_QUOTE_ABI = [
+              {
+                inputs: [
+                  { name: 'amountIn', type: 'uint256' },
+                  { name: 'path', type: 'address[]' },
+                ],
+                name: 'getAmountsOut',
+                outputs: [{ name: 'amounts', type: 'uint256[]' }],
+                stateMutability: 'view',
+                type: 'function',
+              },
+            ] as const;
+
+            // For single-step routes, validate the quote directly
+            if (request.steps.length === 1) {
+              const step = request.steps[0];
+              const freshAmounts = await publicClient.readContract({
+                address: step.router,
+                abi: UNISWAP_V2_ROUTER_QUOTE_ABI,
+                functionName: 'getAmountsOut',
+                args: [request.amountIn, step.path],
+              });
+              const freshOutput = freshAmounts[freshAmounts.length - 1];
+
+              console.log(`[useSwap] Fresh on-chain quote validation:`, {
+                pathFinderExpected: route.totalExpectedOut.toString(),
+                pathFinderExpectedFormatted: (Number(route.totalExpectedOut) / 1e18).toFixed(6),
+                freshQuote: freshOutput.toString(),
+                freshQuoteFormatted: (Number(freshOutput) / 1e18).toFixed(6),
+                currentMinOut: request.minTotalAmountOut.toString(),
+                ratio: route.totalExpectedOut > 0n
+                  ? `${(Number(freshOutput * 10000n / route.totalExpectedOut) / 100).toFixed(2)}%`
+                  : 'N/A',
+              });
+
+              // If the fresh quote is less than our minTotalAmountOut, the swap WILL fail.
+              // Adjust minTotalAmountOut to be based on the fresh quote instead.
+              if (freshOutput < request.minTotalAmountOut) {
+                const discrepancy = route.totalExpectedOut > 0n
+                  ? Number(route.totalExpectedOut - freshOutput) / Number(route.totalExpectedOut) * 100
+                  : 100;
+
+                console.warn(
+                  `[useSwap] Fresh quote (${(Number(freshOutput) / 1e18).toFixed(4)}) is LOWER than minTotalAmountOut (${(Number(request.minTotalAmountOut) / 1e18).toFixed(4)}). ` +
+                  `PathFinder was ${discrepancy.toFixed(1)}% too optimistic. Adjusting minTotalAmountOut.`
+                );
+
+                // Use the fresh quote with slippage applied
+                const freshSlippageMultiplier = 10000n - BigInt(slippageBps);
+                const adjustedMinOut = (freshOutput * freshSlippageMultiplier) / 10000n;
+
+                // Safety: don't accept quotes below 0.1% of input value
+                const minAcceptableOut = (request.amountIn * 1n) / 1000n;
+                if (adjustedMinOut < minAcceptableOut) {
+                  throw new Error(
+                    `The pool's current output (${(Number(freshOutput) / 1e18).toFixed(4)}) is far below the expected amount. ` +
+                    `The pool may have insufficient liquidity. Please try a smaller amount or a different route.`
+                  );
+                }
+
+                // Update the request with the adjusted minTotalAmountOut
+                (request as { minTotalAmountOut: bigint }).minTotalAmountOut = adjustedMinOut;
+
+                // Also update the step's minAmountOut to match
+                if (request.steps.length > 0) {
+                  (request.steps[0] as { minAmountOut: bigint }).minAmountOut = adjustedMinOut;
+                }
+
+                console.log(`[useSwap] Adjusted minTotalAmountOut to: ${adjustedMinOut.toString()} (${(Number(adjustedMinOut) / 1e18).toFixed(4)})`);
+              }
+            }
+          } catch (quoteErr) {
+            const quoteErrMsg = quoteErr instanceof Error ? quoteErr.message : String(quoteErr);
+
+            // Re-throw our own thrown errors (pool insufficient liquidity)
+            if (quoteErrMsg.includes('far below the expected amount') || quoteErrMsg.includes('insufficient liquidity')) {
+              throw quoteErr;
+            }
+
+            // If getAmountsOut itself reverted, this may be due to:
+            // - Fee-on-transfer tokens that cause getAmountsOut to miscalculate
+            // - Custom router implementations that don't support getAmountsOut for all pairs
+            // - Transfer tax mechanics
+            // The route was already computed by the pathFinder using pool reserves, so it may
+            // still be valid. Log a warning and continue with the original parameters.
+            // The on-chain swap will either succeed or fail with a clear revert reason.
+            if (quoteErrMsg.includes('reverted') || quoteErrMsg.includes('revert')) {
+              console.warn(`[useSwap] Fresh quote validation: getAmountsOut reverted — continuing with original route params. The route was computed from pool reserves and may still be valid.`, quoteErrMsg);
+            }
+
+            // For non-revert errors (network timeout, RPC issues), log and continue
+            // since these may be transient and the swap might still succeed.
+            console.warn(`[useSwap] Fresh quote validation failed (continuing with original params):`, quoteErrMsg);
+          }
+
           // Step 2: Estimate gas with buffer for resilience
           const gasLimit = await estimateGasWithBuffer(request);
 
@@ -1411,7 +1693,7 @@ export function useSwap() {
             {
               code: isUserRejection(err) ? 'USER_REJECTED' : decodedName ?? 'EXECUTION_FAILED',
               message: err instanceof Error ? err.message : String(err),
-              revertReason: selector ? `${decodedName ?? 'Unknown'} (0x${selector})` : undefined,
+              revertReason: selector ? `${decodedName ?? 'Unknown'} (${selector})` : undefined,
             },
             { routesConsidered: 0, selectedRouteId: route.id, selectedRouteSteps: route.steps, availableRoutes: [], priceImpact: route.priceImpact, outputAmount: route.totalExpectedOut.toString(), outputAmountFormatted: '', routingTimeMs: 0 }
           );
@@ -1488,6 +1770,81 @@ export function useSwap() {
             continue;
           }
 
+          // ─── Aggregator Fallback: Try Direct Router Swap ─────────────────
+          // When the aggregator gas estimation fails with a contract revert
+          // (e.g., fee-on-transfer tokens that don't work through the aggregator),
+          // fall back to a direct DEX router swap. This bypasses the aggregator
+          // entirely, avoiding the double-tax issue and contract interaction problems.
+          const fallbackErrorStr = String(err);
+          const isContractRevert =
+            fallbackErrorStr.toLowerCase().includes('revert') ||
+            fallbackErrorStr.toLowerCase().includes('execution reverted');
+
+          if (isContractRevert && route.steps.length === 1) {
+            console.warn('[useSwap] Aggregator swap reverted — falling back to direct router swap');
+            try {
+              const step = route.steps[0];
+              const currentTimeSeconds = Math.floor(Date.now() / 1000);
+              const fallbackDeadline = BigInt(currentTimeSeconds + (deadlineMinutes || 5) * 60);
+              const slippageMultiplier = 10000n - BigInt(slippageBps);
+              const fallbackMinAmountOut = (route.totalExpectedOut * slippageMultiplier) / 10000n;
+
+              const directParams: DirectRouterSwapParams = {
+                tokenIn: step.path[0] as Address,
+                tokenOut: step.path[step.path.length - 1] as Address,
+                amountIn: route.totalAmountIn,
+                minAmountOut: fallbackMinAmountOut,
+                router: step.dexRouter as Address,
+                recipient: address!,
+                deadline: fallbackDeadline,
+                path: step.path as Address[],
+              };
+
+              setSwapMode('direct');
+              setIsPending(false);
+
+              const directResult = await directSwap.executeDirectSwap(directParams);
+
+              if (directResult.success) {
+                setIsConfirmed(true);
+                setTxHash(directResult.txHash);
+                setIsConfirming(false);
+                console.log('[useSwap] Direct router swap succeeded (fallback)');
+                return;
+              } else {
+                console.warn('[useSwap] Direct router swap also failed:', directResult.error);
+                // Both aggregator and direct router failed — token has transfer restrictions
+                const tokenRestrictionMsg =
+                  `This token cannot be swapped. ` +
+                  `Both the aggregator and direct DEX router paths failed, which indicates ` +
+                  `the token has transfer restrictions (e.g., anti-contract mechanics, whitelist-only trading, ` +
+                  `or blocked transferFrom) that prevent DEX swaps entirely. ` +
+                  `Please contact the token team to whitelist the DEX contracts, or try swapping on the token's official platform.`;
+                setError(tokenRestrictionMsg);
+                setIsPending(false);
+                setIsConfirming(false);
+                trackSwapFailure(attemptId, {
+                  code: 'TOKEN_TRANSFER_RESTRICTED',
+                  message: tokenRestrictionMsg,
+                  revertReason: 'transferFrom blocked by token contract',
+                }, { routesConsidered: 0, selectedRouteId: route.id, selectedRouteSteps: route.steps, availableRoutes: [], priceImpact: route.priceImpact, outputAmount: route.totalExpectedOut.toString(), outputAmountFormatted: '', routingTimeMs: 0 });
+                return;
+              }
+            } catch (fallbackErr) {
+              console.warn('[useSwap] Direct router swap fallback error:', fallbackErr);
+              // Both paths failed — token has transfer restrictions
+              const tokenRestrictionMsg =
+                `This token cannot be swapped. ` +
+                `Both the aggregator and direct DEX router paths failed, which indicates ` +
+                `the token has transfer restrictions that prevent DEX swaps entirely. ` +
+                `Please contact the token team to whitelist the DEX contracts, or try swapping on the token's official platform.`;
+              setError(tokenRestrictionMsg);
+              setIsPending(false);
+              setIsConfirming(false);
+              return;
+            }
+          }
+
           // Non-retriable error or exhausted retries — classify and set error
           // Use enhanced error decoding for better debugging info
           const routeContext = {
@@ -1533,10 +1890,11 @@ export function useSwap() {
   return {
     executeSwap,
     reset,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    txHash,
-    error,
+    isPending: isPending || directSwap.isPending,
+    isConfirming: isConfirming || directSwap.isConfirming,
+    isConfirmed: isConfirmed || directSwap.isConfirmed,
+    txHash: txHash ?? directSwap.txHash,
+    error: error ?? directSwap.error,
+    swapMode,
   };
 }

@@ -29,7 +29,6 @@ if (typeof (globalThis as Record<string, unknown>).window === 'undefined') {
 
 // ─── Mock wagmi hooks ───────────────────────────────────────────────────────
 
-const mockConnectAsync = vi.fn();
 const mockDisconnect = vi.fn();
 const mockUseAccount = vi.fn();
 const mockUseChainId = vi.fn();
@@ -590,8 +589,8 @@ describe('WalletModal — MetaMask integration', () => {
 
     it('showSuccess is false for non-matching connectors', () => {
       const connectionSuccess = true;
-      const pendingConnector = 'mm-1';
-      const currentConnectorUid = 'wc-1';
+      const pendingConnector = 'mm-1' as string;
+      const currentConnectorUid = 'wc-1' as string;
 
       const showSuccess = connectionSuccess && pendingConnector === currentConnectorUid;
 
@@ -681,7 +680,7 @@ describe('WalletModal — MetaMask integration', () => {
   describe('wrong network state', () => {
     it('detects wrong network when chain ID does not match Dogechain', () => {
       const isConnected = true;
-      const chainId = 1; // Ethereum mainnet
+      const chainId = 1 as number; // Ethereum mainnet
 
       const isWrongNetwork = isConnected && chainId !== DOGECHAIN_ID;
 
@@ -699,7 +698,7 @@ describe('WalletModal — MetaMask integration', () => {
 
     it('does not flag wrong network when not connected', () => {
       const isConnected = false;
-      const chainId = 1;
+      const chainId = 1 as number;
 
       const isWrongNetwork = isConnected && chainId !== DOGECHAIN_ID;
 

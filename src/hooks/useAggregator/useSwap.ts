@@ -1873,7 +1873,7 @@ export function useSwap() {
       setIsPending(false);
       setIsConfirming(false);
     },
-    [address, publicClient, writeContractAsync, approve, buildSwapRequest, wrapDogeIfNeeded, estimateGasWithBuffer, validateSwap],
+    [address, publicClient, writeContractAsync, approve, buildSwapRequest, wrapDogeIfNeeded, estimateGasWithBuffer, validateSwap, directSwap],
   );
 
   /**

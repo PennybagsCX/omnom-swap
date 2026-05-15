@@ -289,7 +289,7 @@ export function AggregatorSwap({ walletScan }: { walletScan: WalletScanResult })
     });
 
     return () => { cancelled = true; };
-  }, [sellToken.address, address, publicClient, isConnected, checkCompatibility, route?.steps]);
+  }, [sellToken, sellToken.address, address, publicClient, isConnected, checkCompatibility, route?.steps]);
 
   // Stabilize publicClient via ref to prevent infinite re-render loops
   const publicClientRef = useRef(publicClient);

@@ -324,28 +324,113 @@ export function getDetectedWallets(): Array<{ id: string; name: string; icon: st
 }
 
 // ---------------------------------------------------------------------------
+// Provider wait / retry
+// ---------------------------------------------------------------------------
+
+/**
+ * Wait for `window.ethereum` to become available.
+ *
+ * Wallet extensions inject `window.ethereum` asynchronously — it may not be
+ * present at module initialization time. This function polls for it with a
+ * configurable timeout.
+ *
+ * @param timeoutMs Maximum time to wait in milliseconds (default: 1000).
+ * @returns `true` if a provider was detected before the timeout, `false` otherwise.
+ */
+export function waitForProvider(timeoutMs: number = 1000): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Check immediately — in most cases the provider is already available
+    if (getEthereumFromWindow()) {
+      resolve(true);
+      return;
+    }
+
+    const startTime = Date.now();
+    const pollInterval = 50; // Check every 50ms
+
+    const timer = setInterval(() => {
+      if (getEthereumFromWindow()) {
+        clearInterval(timer);
+        resolve(true);
+        return;
+      }
+
+      if (Date.now() - startTime >= timeoutMs) {
+        clearInterval(timer);
+        resolve(false);
+      }
+    }, pollInterval);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // SES lockdown mitigation
 // ---------------------------------------------------------------------------
 
 /**
- * Install a global error handler that suppresses known SES lockdown errors.
+ * Check whether an error message matches known SES / LavaMoat lockdown patterns.
+ *
  * These errors are non-fatal — they occur when MetaMask's LavaMoat/SES removes
  * JavaScript intrinsics that the app doesn't actually depend on.
+ */
+function isSESLockdownError(msg: string): boolean {
+  const lower = msg.toLowerCase();
+
+  // Exact / substring matches for known error messages
+  const knownPatterns = [
+    'SES lockdown',
+    'Removing unpermitted intrinsics',
+    'Lockdown failed',
+    'lockdown failed:',
+    'installOneConstantShim: non-configurable',
+    'harden: unexpected intrinsic',
+    'SES_ASSERT',
+    'policy() not yet supported',
+    'removeProperty is not a function',        // SES removes Object.prototype
+    'defineProperty is not a function',         // SES shim errors
+    'MetaMask - SES',
+    'LavaMoat/node',                            // LavaMoat packaging errors
+    'LavaMoat/allow-scripts',                   // Script policy errors
+    'Unable to initialize LavaMoat',
+    'Error: LavaMoat',
+  ];
+
+  for (const pattern of knownPatterns) {
+    if (msg.includes(pattern) || lower.includes(pattern.toLowerCase())) {
+      return true;
+    }
+  }
+
+  // Compound patterns (require two keywords together)
+  if (lower.includes('lavamoat') && lower.includes('lockdown')) return true;
+  if (lower.includes('lavamoat') && lower.includes('error')) return true;
+
+  // Catch-all: any message containing 'lockdown', 'SES', or 'LavaMoat'
+  // that looks like it came from a wallet extension (not user code)
+  if (lower.includes('lockdown') || lower.includes('ses/') || lower.includes('lavamoat')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Install a global error handler that suppresses known SES lockdown errors.
  *
  * Returns a cleanup function to remove the listener.
  */
 export function installSESErrorSuppression(): () => void {
   const handler = (event: ErrorEvent): void => {
-    const msg = event.message ?? '';
-    if (
-      msg.includes('SES lockdown') ||
-      msg.includes('Removing unpermitted intrinsics') ||
-      msg.includes('Lockdown failed') ||
-      (msg.toLowerCase().includes('lavamoat') && msg.toLowerCase().includes('lockdown'))
-    ) {
-      console.warn('[WalletProviderManager] Suppressed SES lockdown warning:', msg);
-      event.stopImmediatePropagation();
-      event.preventDefault();
+    try {
+      const msg = event.message ?? '';
+      if (isSESLockdownError(msg)) {
+        console.warn('[WalletProviderManager] Suppressed SES lockdown warning:', msg);
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      }
+    } catch {
+      // If the handler itself fails (e.g. event.message is a getter that throws),
+      // silently ignore — we don't want our error suppression to cause errors.
     }
   };
 
@@ -365,14 +450,21 @@ export function suppressMetaMaskProviderError(): () => void {
   const suppressedPatterns = [
     'MetaMask encountered an error setting the global Ethereum provider',
     'error setting the global Ethereum provider',
+    'MetaMask: MetaMask failed to set provider',           // Additional MetaMask pattern
+    'MetaMask: Failed to set window.ethereum',             // Newer MetaMask versions
+    'MetaMask: The global web3 is already set',            // Web3 conflict
   ];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   console.error = (...args: any[]) => {
-    const message = args.map((a: unknown) => (typeof a === 'string' ? a : '')).join(' ');
-    if (suppressedPatterns.some((p) => message.includes(p))) {
-      console.warn('[WalletProviderManager] Suppressed MetaMask provider conflict warning');
-      return;
+    try {
+      const message = args.map((a: unknown) => (typeof a === 'string' ? a : '')).join(' ');
+      if (suppressedPatterns.some((p) => message.includes(p))) {
+        console.warn('[WalletProviderManager] Suppressed MetaMask provider conflict warning');
+        return;
+      }
+    } catch {
+      // If message extraction fails, fall through to original error
     }
     originalError.apply(console, args);
   };

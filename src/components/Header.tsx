@@ -4,6 +4,7 @@ import { dogechain } from 'wagmi/chains';
 import { Menu, X, ExternalLink } from 'lucide-react';
 import { WalletModal } from './WalletModal';
 import { useToast } from './ToastContext';
+import { useMetaMaskStatus } from '../hooks/useMetaMaskStatus';
 import type { TabType } from '../App';
 
 const DOGECHAIN_ID = dogechain.id;
@@ -18,6 +19,7 @@ export function Header({ activeTab, setActiveTab }: { activeTab: TabType, setAct
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const { addToast } = useToast();
+  const { isMetaMaskConnected } = useMetaMaskStatus();
   const isWrongNetwork = isConnected && chainId !== DOGECHAIN_ID;
 
   // Close mobile menu on outside click
@@ -120,7 +122,14 @@ export function Header({ activeTab, setActiveTab }: { activeTab: TabType, setAct
             >
               {isWrongNetwork
                 ? 'SWITCH'
-                : isConnected ? getTruncatedAddress(address!) : 'CONNECT'}
+                : isConnected ? (
+                  <span className="flex items-center gap-1.5">
+                    {isMetaMaskConnected && (
+                      <img src="/wallets/metamask.svg" alt="" className="w-4 h-4 md:w-5 md:h-5 shrink-0" aria-hidden="true" />
+                    )}
+                    {getTruncatedAddress(address!)}
+                  </span>
+                ) : 'CONNECT'}
             </button>
           </div>
 

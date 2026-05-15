@@ -9,6 +9,24 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
     },
+    dedupe: [
+      'react',
+      'react-dom',
+      'wagmi',
+      '@wagmi/core',
+      '@wagmi/connectors',
+      'viem',
+      '@tanstack/react-query',
+    ],
+  },
+  optimizeDeps: {
+    include: [
+      'wagmi',
+      '@wagmi/core',
+      '@wagmi/connectors',
+      'viem',
+      '@tanstack/react-query',
+    ],
   },
   server: {
     port: 3000,

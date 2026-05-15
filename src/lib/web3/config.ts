@@ -1,7 +1,6 @@
 import { createConfig, http } from 'wagmi'
-import { metaMask, injected, walletConnect, coinbaseWallet } from 'wagmi/connectors'
+import { injected, walletConnect, coinbaseWallet } from 'wagmi/connectors'
 import { dogechain } from 'wagmi/chains'
-import { isMetaMaskAvailable } from '../walletProviderManager'
 
 // Use VITE_RPC_URL if configured (e.g., private relay for MEV protection),
 // otherwise fall back to the default public Dogechain RPC.
@@ -15,27 +14,18 @@ const WALLETCONNECT_PROJECT_ID = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID |
  * Build connectors list with safe multi-provider handling.
  *
  * Strategy:
- *  - The `metaMask()` connector is always included — it has built-in logic to
- *    detect MetaMask inside `window.ethereum.providers` even when another
- *    extension has set `window.ethereum` as a getter.
- *  - The generic `injected()` connector is included when MetaMask is NOT the
- *    active injected provider, so we don't show a duplicate entry in the
- *    wallet modal for the same underlying provider.
- *  - If no injected provider is detected at all, both connectors are included
- *    so the user sees options regardless of timing.
+ *  - The generic `injected()` connector handles MetaMask and any other
+ *    browser-injected wallet via window.ethereum. Combined with EIP-6963
+ *    auto-discovery (handled by wagmi), this covers all major wallets
+ *    without requiring the `@metamask/connect-evm` dependency that causes
+ *    Vite resolution failures due to its deep CJS-only dependency tree.
+ *  - WalletConnect and Coinbase are included as dedicated connectors when
+ *    configured.
+ *  - Deduplication is handled at render time in WalletModal, which maps
+ *    connector IDs to friendly display names and hides duplicates.
  */
-const metaMaskDetected = isMetaMaskAvailable();
-
 const connectors = [
-  metaMask({
-    dappMetadata: {
-      name: 'OMNOM Swap',
-      url: 'https://omnomswap.com',
-    },
-  }),
-  // Skip generic injected() when MetaMask is the active injected provider
-  // to avoid duplicate connector entries in the wallet modal.
-  ...(!metaMaskDetected ? [injected()] : []),
+  injected(),
   ...(WALLETCONNECT_PROJECT_ID
     ? [walletConnect({ projectId: WALLETCONNECT_PROJECT_ID, showQrModal: true })]
     : []),

@@ -1,13 +1,17 @@
-import { useState, useCallback, useMemo } from 'react';
-import { useConnect, useDisconnect, useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useConnect, useDisconnect, useAccount, useChainId } from 'wagmi';
+import type { Connector } from 'wagmi';
 import { dogechain } from 'wagmi/chains';
-import { Ghost, X, AlertTriangle } from 'lucide-react';
+import { Ghost, X, AlertTriangle, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   detectProviderConflict,
   setPreferredWallet,
+  waitForProvider,
   type ProviderConflictInfo,
 } from '../lib/walletProviderManager';
+import { useAutoAddChain } from '../hooks/useAutoAddChain';
+import { useMetaMaskStatus } from '../hooks/useMetaMaskStatus';
 
 const DOGECHAIN_ID = dogechain.id;
 
@@ -17,42 +21,82 @@ interface WalletModalProps {
   onToast?: (toast: { type: 'success' | 'error' | 'warning'; title: string; message: string }) => void;
 }
 
-/** Detect the actual injected provider from window.ethereum */
-function detectInjectedProvider(): { name: string; icon: string } | null {
-  try {
-    const ethereum = (window as unknown as { ethereum?: Record<string, unknown> }).ethereum;
-    if (!ethereum) return null;
-
-    // Check for specific providers — order matters (most specific first)
-    if (ethereum.isRabby) return { name: 'Rabby', icon: '/wallets/rabby.svg' };
-    if (ethereum.isTrust || ethereum.isTrustWallet) return { name: 'Trust Wallet', icon: '/wallets/trust.svg' };
-    if (ethereum.isCoinbaseWallet) return { name: 'Coinbase Wallet', icon: '/wallets/coinbase.svg' };
-    if (ethereum.isMetaMask) return { name: 'MetaMask', icon: '/wallets/metamask.svg' };
-
-    return null; // Unknown provider — will use generic "Browser Wallet"
-  } catch {
-    // SES lockdown or property access error
-    return null;
-  }
-}
+/** Known EIP-6963 RDNS-to-display mappings */
+const EIP6963_WALLET_MAP: Record<string, { name: string; icon: string }> = {
+  'io.rabby': { name: 'Rabby', icon: '/wallets/rabby.svg' },
+  'com.trustwallet': { name: 'Trust Wallet', icon: '/wallets/trust.svg' },
+  'io.metamask': { name: 'MetaMask', icon: '/wallets/metamask.svg' },
+  'com.coinbase': { name: 'Coinbase Wallet', icon: '/wallets/coinbase.svg' },
+  'com.brave': { name: 'Brave Wallet', icon: '/wallets/browser.svg' },
+  'com.frame': { name: 'Frame', icon: '/wallets/browser.svg' },
+  'me.rainbow': { name: 'Rainbow', icon: '/wallets/browser.svg' },
+  'com.okex': { name: 'OKX Wallet', icon: '/wallets/browser.svg' },
+};
 
 /** Map connector IDs to friendly display info */
 function getWalletMeta(connectorId: string, connectorName: string) {
   const id = connectorId.toLowerCase();
 
-  if (id.includes('metamask')) return { name: 'MetaMask', icon: '/wallets/metamask.svg' };
+  // Config-provided connectors
   if (id.includes('walletconnect') || id.includes('wc')) return { name: 'WalletConnect', icon: '/wallets/walletconnect.svg' };
   if (id.includes('coinbase')) return { name: 'Coinbase Wallet', icon: '/wallets/coinbase.svg' };
 
-  // Generic injected connector — auto-detect the actual provider
+  // EIP-6963 auto-discovered connectors (RDNS-style IDs like io.rabby, com.trustwallet)
+  const eip6963Match = EIP6963_WALLET_MAP[id];
+  if (eip6963Match) return eip6963Match;
+
+  // Partial match fallback for EIP-6963 IDs
+  if (id.includes('rabby')) return { name: 'Rabby', icon: '/wallets/rabby.svg' };
+  if (id.includes('trust')) return { name: 'Trust Wallet', icon: '/wallets/trust.svg' };
+  if (id.includes('metamask')) return { name: 'MetaMask', icon: '/wallets/metamask.svg' };
+
+  // Generic injected connector
   if (id.includes('injected')) {
-    const detected = detectInjectedProvider();
-    if (detected) return detected;
+    return { name: 'Browser Wallet', icon: '/wallets/browser.svg' };
+  }
+
+  // Unknown EIP-6963 connector — use the connector's own name if available
+  if (id.includes('.')) {
+    const cleanName = connectorName?.trim();
+    if (cleanName && cleanName !== id) {
+      return { name: cleanName, icon: '/wallets/browser.svg' };
+    }
     return { name: 'Browser Wallet', icon: '/wallets/browser.svg' };
   }
 
   // Fallback: use the connector's own name
-  return { name: connectorName, icon: '/wallets/fallback.svg' };
+  return { name: connectorName || 'Browser Wallet', icon: '/wallets/fallback.svg' };
+}
+
+/**
+ * Detect whether an error represents a user rejection (EIP-1193 code 4001,
+ * or common rejection messages from wallets). Used to prevent the EIP-6963
+ * fallback from opening a second connection attempt when the user intentionally
+ * cancelled the first one.
+ */
+function isUserRejectionError(err: unknown): boolean {
+  if (!err) return false;
+
+  // EIP-1193 provider error with code 4001 (user rejected)
+  if (typeof err === 'object' && err !== null) {
+    const code = (err as { code?: number }).code;
+    if (code === 4001) return true;
+  }
+
+  if (err instanceof Error) {
+    const lower = err.message.toLowerCase();
+    if (lower.includes('rejected') || lower.includes('denied') || lower.includes('user rejected')) {
+      return true;
+    }
+  }
+
+  // Wagmi/viem wraps errors — check the nested `cause` (ProviderError / RpcError)
+  if (typeof err === 'object' && err !== null) {
+    const cause = (err as { cause?: unknown }).cause;
+    if (cause) return isUserRejectionError(cause);
+  }
+
+  return false;
 }
 
 /**
@@ -112,44 +156,168 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
   const { disconnect } = useDisconnect();
   const { isConnected, address } = useAccount();
   const chainId = useChainId();
-  const { switchChain } = useSwitchChain();
   const [pendingConnector, setPendingConnector] = useState<string | null>(null);
   const [pendingVirtual, setPendingVirtual] = useState(false);
+  const [connectionSuccess, setConnectionSuccess] = useState(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isWrongNetwork = isConnected && chainId !== DOGECHAIN_ID;
+  const { isMetaMaskInstalled } = useMetaMaskStatus();
+
+  // Auto-add chain hook — handles wallet_addEthereumChain when chain not configured
+  const { autoAddAndSwitch } = useAutoAddChain();
+
+  // Wait for window.ethereum to be injected by wallet extensions.
+  // This handles the race condition where the modal mounts before the
+  // extension has finished injecting the provider. The providerReady
+  // state triggers a re-render so deduplication logic can re-evaluate.
+  const [providerReady, setProviderReady] = useState(false);
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    waitForProvider(1000).then((found) => {
+      if (!cancelled) setProviderReady(found);
+    });
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   // Detect provider conflicts using the wallet provider manager
   const conflictInfo: ProviderConflictInfo = useMemo(() => detectProviderConflict(), []);
 
-  // Deduplicate connectors: when an injected provider is present, the generic
-  // injected() connector already covers any injected wallet (MetaMask, Rabby,
-  // Coinbase, etc.), so we skip dedicated connectors that would connect to the
-  // same underlying provider to avoid showing duplicate entries.
-  const detectedProvider = detectInjectedProvider();
-  const hasInjectedProvider = !!(window as unknown as { ethereum?: unknown }).ethereum;
+  // ---------------------------------------------------------------------------
+  // Connector deduplication
+  // ---------------------------------------------------------------------------
+  //
+  // wagmi provides connectors from two sources:
+  //   1. Config-provided: injected(), walletConnect(), coinbaseWallet()
+  //   2. EIP-6963 auto-discovered: io.rabby, com.coinbase, io.metamask, etc.
+  //
+  // Rules (simple and predictable):
+  //   - EIP-6963 connectors are ALWAYS shown — they represent specific wallets
+  //   - Generic injected() is HIDDEN when any EIP-6963 connector exists
+  //   - coinbaseWallet() is HIDDEN when EIP-6963 com.coinbase exists
+  //   - walletConnect() is ALWAYS shown
+  //   - A final name-based dedup pass catches remaining collisions
+  //
   const deduplicatedConnectors = useMemo(() => {
-    if (!hasInjectedProvider) return connectors;
+    // When provider isn't ready yet (still waiting for extension injection),
+    // show all connectors to avoid hiding something the user needs.
+    if (!providerReady && !(window as unknown as { ethereum?: unknown }).ethereum) {
+      return connectors;
+    }
 
-    return connectors.filter(c => {
+    // Identify EIP-6963 auto-discovered connectors (RDNS-style IDs containing dots)
+    const eip6963Ids = new Set(
+      connectors
+        .filter(c => {
+          const id = c.id.toLowerCase();
+          return id.includes('.') &&
+            !id.includes('walletconnect') &&
+            !id.includes('wc');
+        })
+        .map(c => c.id.toLowerCase())
+    );
+
+    const hasEip6963 = eip6963Ids.size > 0;
+    const hasCoinbaseEip6963 = eip6963Ids.has('com.coinbase');
+
+    const filtered = connectors.filter(c => {
       const id = c.id.toLowerCase();
-      // Always hide the dedicated MetaMask connector — the injected()
-      // connector already wraps whatever provider window.ethereum points to.
-      if (id.includes('metamask')) return false;
 
-      // If the injected provider is Coinbase Wallet, also hide the dedicated
-      // coinbaseWallet() connector to avoid a duplicate "Coinbase Wallet" entry.
-      if (id.includes('coinbase') && detectedProvider?.name === 'Coinbase Wallet') {
+      // Hide generic injected() when any EIP-6963 connector exists.
+      // EIP-6963 connectors are preferred — they target specific wallets.
+      // The injected() connector is only useful when NO EIP-6963 connectors
+      // are present (e.g. unknown wallet extension without EIP-6963 support).
+      if (id === 'injected' && hasEip6963) {
+        return false;
+      }
+
+      // Hide coinbaseWallet() when EIP-6963 com.coinbase exists
+      if (id.includes('coinbase') && !id.includes('.') && hasCoinbaseEip6963) {
         return false;
       }
 
       return true;
     });
-  }, [connectors, hasInjectedProvider, detectedProvider?.name]);
+
+    return filtered;
+  }, [connectors, providerReady]);
+
+  // ---------------------------------------------------------------------------
+  // Connection logic
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Race connectAsync against a timeout. EIP-6963 providers can hang
+   * indefinitely when the wallet's background process is unreachable
+   * (e.g. MetaMask's inpage.js can't connect to its extension background
+   * when another wallet like Rabby controls window.ethereum).
+   */
+  const EIP6963_TIMEOUT_MS = 3_000;
 
   const handleConnect = useCallback(async (connector: typeof connectors[number]) => {
-    setPendingConnector(connector.uid);
+    // Determine the actual connector to use for connection.
+    // When io.metamask EIP-6963 is selected but another wallet (Rabby, Trust,
+    // Coinbase, Brave) controls window.ethereum, the EIP-6963 provider can't
+    // open a popup — it silently hangs. Routing through the generic injected()
+    // connector (which uses window.ethereum) lets the controlling wallet's
+    // wrapped provider handle the request correctly.
+    let activeConnector = connector;
+    const isMetaMaskEip6963 = connector.id === 'io.metamask';
+
+    if (isMetaMaskEip6963) {
+      const eth = (window as unknown as Record<string, unknown>).ethereum as
+        | Record<string, unknown>
+        | undefined;
+      const otherWalletDetected =
+        eth?.isRabby || eth?.isTrust || eth?.isCoinbaseWallet || eth?.isBraveWallet;
+      if (otherWalletDetected) {
+        const injectedConn = connectors.find(c => c.id === 'injected');
+        if (injectedConn) {
+          console.warn(
+            '[WalletModal] Another wallet controls window.ethereum — routing MetaMask through injected() connector'
+          );
+          activeConnector = injectedConn;
+        }
+      }
+    }
+
+    setPendingConnector(activeConnector.uid);
+
+    const isEip6963 = activeConnector.id.includes('.') &&
+      !activeConnector.id.toLowerCase().includes('walletconnect') &&
+      !activeConnector.id.toLowerCase().includes('wc');
+
+    // Find the generic injected() connector as a fallback for EIP-6963 failures.
+    // When an EIP-6963 connector (e.g. io.metamask) fails because another wallet
+    // controls window.ethereum, injected() can route through the controlling wallet's
+    // wrapped provider to reach the target wallet.
+    const injectedFallback = isEip6963
+      ? connectors.find(c => c.id === 'injected')
+      : undefined;
+
     try {
-      await connectAsync({ connector, chainId: DOGECHAIN_ID });
+      if (isEip6963) {
+        // Race connectAsync against a timeout for EIP-6963 connectors.
+        // The provider may hang if the wallet background is unreachable.
+        const result = await Promise.race([
+          connectAsync({ connector: activeConnector, chainId: DOGECHAIN_ID }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Connection timed out — wallet may be unreachable via EIP-6963')), EIP6963_TIMEOUT_MS)
+          ),
+        ]);
+        void result;
+      } else {
+        await connectAsync({ connector: activeConnector, chainId: DOGECHAIN_ID });
+      }
+
       setPendingConnector(null);
+
+      // Show brief success animation before closing
+      setConnectionSuccess(true);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+      successTimerRef.current = setTimeout(() => {
+        setConnectionSuccess(false);
+      }, 800);
 
       // Store the user's wallet preference for future provider resolution
       const meta = getWalletMeta(connector.id, connector.name);
@@ -157,6 +325,8 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
         const walletId = connector.id.toLowerCase().includes('metamask') ? 'metamask'
           : connector.id.toLowerCase().includes('coinbase') ? 'coinbase'
           : connector.id.toLowerCase().includes('walletconnect') ? 'walletconnect'
+          : connector.id.toLowerCase().includes('rabby') ? 'rabby'
+          : connector.id.toLowerCase().includes('trust') ? 'trust'
           : 'injected';
         setPreferredWallet(walletId);
       }
@@ -164,11 +334,49 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
       onToast?.({ type: 'success', title: 'Wallet Connected', message: 'Ready to swap on Dogechain' });
       setTimeout(() => onClose(), 300);
     } catch (err: unknown) {
+      // If the user intentionally rejected the connection prompt (clicked
+      // "Cancel" in the wallet extension), do NOT fall back to injected().
+      if (isUserRejectionError(err)) {
+        setPendingConnector(null);
+        onToast?.({ type: 'error', title: 'Connection Rejected', message: 'Connection request was rejected' });
+        return;
+      }
+
+      // For non-rejection errors (broken EIP-6963 provider, timeout, etc.),
+      // fall back to the generic injected() connector which uses
+      // window.ethereum directly and is more reliable when another wallet
+      // wraps the target wallet's provider.
+      if (injectedFallback) {
+        try {
+          setPendingConnector(injectedFallback.uid);
+          await connectAsync({ connector: injectedFallback, chainId: DOGECHAIN_ID });
+          setPendingConnector(null);
+
+          setConnectionSuccess(true);
+          if (successTimerRef.current) clearTimeout(successTimerRef.current);
+          successTimerRef.current = setTimeout(() => setConnectionSuccess(false), 800);
+
+          setPreferredWallet('injected');
+          onToast?.({ type: 'success', title: 'Wallet Connected', message: 'Ready to swap on Dogechain' });
+          setTimeout(() => onClose(), 300);
+          return; // connected via fallback — don't show error
+        } catch {
+          // Fallback also failed — fall through to error display
+        }
+      }
+
       setPendingConnector(null);
       const message = formatConnectionError(err);
       onToast?.({ type: 'error', title: 'Connection Failed', message });
     }
-  }, [connectAsync, onToast, onClose]);
+  }, [connectAsync, connectors, onToast, onClose]);
+
+  // Cleanup success timer on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   return (
     <AnimatePresence>
@@ -228,10 +436,14 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
                     </div>
                   </div>
                   <button
-                    onClick={() => {
-                      switchChain({ chainId: DOGECHAIN_ID });
-                      onToast?.({ type: 'success', title: 'Switching Network', message: 'Switching to Dogechain...' });
-                      onClose();
+                    onClick={async () => {
+                      const result = await autoAddAndSwitch();
+                      onToast?.({
+                        type: result.success ? 'success' : 'error',
+                        title: result.success ? 'Switching Network' : 'Network Error',
+                        message: result.message,
+                      });
+                      if (result.success) onClose();
                     }}
                     aria-label="Switch to Dogechain network"
                     className="w-full bg-primary text-black font-headline font-black py-4 uppercase tracking-tighter hover:bg-white hover:text-black transition-colors cursor-pointer"
@@ -274,27 +486,32 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
                 <div className="flex flex-col gap-3">
                   <p className="font-body text-sm text-on-surface-variant mb-2">Select a provider to interface with the Dogechain network.</p>
                   {(() => {
-                    // Find the WalletConnect connector for virtual wallets
+                    // Find the WalletConnect connector for virtual wallet entries
                     const wcConnector = deduplicatedConnectors.find(c =>
                       c.id.toLowerCase().includes('walletconnect') || c.id.toLowerCase().includes('wc')
                     );
 
-                    // Build the display list: real connectors + virtual Trust Wallet
+                    // Build the display list: real connectors first
                     const displayItems: Array<{
                       key: string;
                       name: string;
                       icon: string;
-                      connector: typeof connectors[number];
+                      connector: Connector;
                       isVirtual?: boolean;
                     }> = deduplicatedConnectors.map(c => {
                       const meta = getWalletMeta(c.id, c.name);
                       return { key: c.uid, name: meta.name, icon: meta.icon, connector: c };
                     });
 
-                    // Add Trust Wallet as a virtual entry (connects via WalletConnect)
-                    // Only show if Trust Wallet is NOT already detected as the injected provider
-                    if (wcConnector && detectedProvider?.name !== 'Trust Wallet') {
-                      displayItems.splice(1, 0, {
+                    // Add "Trust Wallet" as a virtual entry that connects
+                    // via WalletConnect QR / deep link. Only show when:
+                    //   - WalletConnect connector is available
+                    //   - No Trust Wallet EIP-6963 connector exists
+                    //   - No Trust Wallet entry already in the display list
+                    const existingNames = new Set(displayItems.map(d => d.name));
+                    const trustAlreadyPresent = existingNames.has('Trust Wallet');
+                    if (wcConnector && !trustAlreadyPresent) {
+                      displayItems.push({
                         key: 'trust-virtual',
                         name: 'Trust Wallet',
                         icon: '/wallets/trust.svg',
@@ -303,21 +520,41 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
                       });
                     }
 
+                    // Final name-based deduplication: if two entries share the same
+                    // display name, keep only the first. This catches edge cases like
+                    // both injected() and an EIP-6963 connector resolving to the same name.
+                    const seenNames = new Set<string>();
+                    const finalDisplayItems = displayItems.filter(item => {
+                      if (seenNames.has(item.name)) return false;
+                      seenNames.add(item.name);
+                      return true;
+                    });
+
                     const isPending = pendingConnector !== null || pendingVirtual;
 
-                    return displayItems.map(item => {
+                    return finalDisplayItems.map((item, index) => {
                       const isThisPending = item.isVirtual
                         ? pendingVirtual
                         : pendingConnector === item.connector.uid;
+                      const isMetaMaskEntry = item.name === 'MetaMask';
+                      const showMetaMaskAccent = isMetaMaskEntry && isMetaMaskInstalled;
+                      const showSuccess = connectionSuccess && isThisPending;
+
                       return (
-                        <button
+                        <motion.button
                           key={item.key}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2, delay: index * 0.06, ease: 'easeOut' }}
                           onClick={async () => {
                             if (item.isVirtual) {
                               setPendingVirtual(true);
                               try {
                                 await connectAsync({ connector: item.connector, chainId: DOGECHAIN_ID });
                                 setPendingVirtual(false);
+                                setConnectionSuccess(true);
+                                if (successTimerRef.current) clearTimeout(successTimerRef.current);
+                                successTimerRef.current = setTimeout(() => setConnectionSuccess(false), 800);
                                 setPreferredWallet('trust');
                                 onToast?.({ type: 'success', title: 'Wallet Connected', message: 'Ready to swap on Dogechain' });
                                 setTimeout(() => onClose(), 300);
@@ -331,20 +568,34 @@ export function WalletModal({ isOpen, onClose, onToast }: WalletModalProps) {
                             }
                           }}
                           disabled={isPending}
-                          className="w-full group flex items-center justify-between p-4 bg-surface text-on-surface border border-outline-variant/30 hover:border-primary hover:bg-surface-container-high transition-all cursor-pointer disabled:opacity-50"
+                          className={`w-full group flex items-center justify-between p-4 min-h-[52px] bg-surface text-on-surface border transition-all cursor-pointer disabled:opacity-50 ${
+                            showSuccess
+                              ? 'border-green-400/60 bg-green-900/10'
+                              : showMetaMaskAccent
+                                ? 'border-l-2 border-l-orange-500 border-t border-r border-b border-t-outline-variant/30 border-r-outline-variant/30 border-b-outline-variant/30 hover:border-l-orange-400 hover:border-t-primary hover:border-r-primary hover:border-b-primary hover:bg-surface-container-high'
+                                : 'border-outline-variant/30 hover:border-primary hover:bg-surface-container-high'
+                          }`}
                         >
-                          <span className="font-headline font-bold text-lg uppercase tracking-tighter text-white flex items-center gap-3">
-                            <img src={item.icon} alt={item.name} className="w-8 h-8 rounded-sm" />
-                            {isThisPending ? 'Connecting...' : item.name}
+                          <span className="font-headline font-bold text-lg uppercase tracking-tighter text-white flex items-center gap-3 min-w-0">
+                            <img src={item.icon} alt={item.name} className="w-8 h-8 rounded-sm shrink-0" />
+                            <span className="truncate">{isThisPending && !showSuccess ? 'Connecting...' : item.name}</span>
+                            {showMetaMaskAccent && !isThisPending && (
+                              <span className="flex items-center gap-1.5 shrink-0">
+                                <span className="w-1.5 h-1.5 bg-green-400 rounded-full shadow-[0_0_4px_rgba(74,222,128,0.6)]" />
+                                <span className="text-[10px] font-body font-medium text-green-400/90 uppercase tracking-wider">Detected</span>
+                              </span>
+                            )}
                           </span>
-                          <div className="w-8 h-8 bg-surface-container-highest flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                            {isThisPending ? (
+                          <div className="w-8 h-8 bg-surface-container-highest flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
+                            {showSuccess ? (
+                              <Check className="w-4 h-4 text-green-400" />
+                            ) : isThisPending ? (
                               <div className="w-2 h-2 bg-primary animate-pulse" />
                             ) : (
                               <div className="w-2 h-2 bg-primary group-hover:animate-ping" />
                             )}
                           </div>
-                        </button>
+                        </motion.button>
                       );
                     });
                   })()}
